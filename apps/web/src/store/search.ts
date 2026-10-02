@@ -53,7 +53,7 @@ export const useSearch = create<SearchState>((set, get) => ({
 
     const adapters = marketIds.map((m) => getRegistry().get(m)).filter((a): a is NonNullable<typeof a> => !!a);
     void (async () => {
-      for await (const ev of runSearch(input, adapters, browserFingerprinter, { signal: abort.signal, maxPerMarket: 9 })) {
+      for await (const ev of runSearch(input, adapters, browserFingerprinter, { signal: abort.signal, maxPerMarket: 40 })) {
         if (abort.signal.aborted) return;
         if (ev.type === "market") set((s) => ({ markets: { ...s.markets, [ev.market]: ev.status } }));
         else if (ev.type === "listing") {
@@ -78,7 +78,7 @@ export const useSearch = create<SearchState>((set, get) => ({
     const adapter = getRegistry().get(market);
     if (!adapter) return;
     set((s) => ({ markets: { ...s.markets, [market]: { state: "pending" } }, listings: { ...s.listings, [market]: [] } }));
-    for await (const ev of runSearch(input, [adapter], browserFingerprinter, { maxPerMarket: 9 })) {
+    for await (const ev of runSearch(input, [adapter], browserFingerprinter, { maxPerMarket: 40 })) {
       if (ev.type === "market") set((s) => ({ markets: { ...s.markets, [ev.market]: ev.status } }));
       else if (ev.type === "listing")
         set((s) => ({ listings: { ...s.listings, [ev.market]: [...(s.listings[ev.market] ?? []), ev.listing] } }));
