@@ -4,6 +4,7 @@ import { placeholder } from "@/lib/catalog";
 import { money } from "@/lib/format";
 import { toTry } from "@/lib/fx";
 import { getRegistry } from "@/lib/registry";
+import { Link } from "react-router-dom";
 import { Badge, cn } from "./ui";
 
 const MARKET_TONE: Record<string, string> = {
@@ -20,10 +21,8 @@ export function ResultCard({ listing, confidence }: { listing: RawListing; confi
   const min = Math.min(...listing.price.tiers.map((t) => t.unitPrice));
   const tryPrice = listing.price.currency === "TRY" ? null : toTry(min, listing.price.currency);
   return (
-    <a
-      href={listing.url}
-      target="_blank"
-      rel="noreferrer noopener"
+    <Link
+      to={`/l/${listing.market}/${listing.id}`}
       className="group flex flex-col overflow-hidden rounded-lg border border-border bg-surface transition-shadow hover:shadow-md"
     >
       <div className="relative aspect-square w-full overflow-hidden bg-surface-2">
@@ -65,15 +64,25 @@ export function ResultCard({ listing, confidence }: { listing: RawListing; confi
             {listing.sold !== undefined ? <div>{listing.sold.toLocaleString("tr-TR")} satış</div> : null}
           </div>
         </div>
-        {(listing.supplierName || badges.length > 0) && (
-          <div className="flex items-center justify-between gap-2 text-[11px] text-muted">
-            <span className="truncate">{listing.supplierName ?? ""}</span>
+        <div className="flex items-center justify-between gap-2 text-[11px] text-muted">
+          <span className="truncate">{listing.supplierName ?? ""}</span>
+          <span className="flex shrink-0 items-center gap-1.5">
             {badges.filter((b) => b !== "verified-factory").slice(0, 1).map((b) => (
               <Badge key={b}>{BADGE_LABELS_TR[b]}</Badge>
             ))}
-          </div>
-        )}
+            <a
+              href={listing.url}
+              target="_blank"
+              rel="noreferrer noopener"
+              onClick={(e) => e.stopPropagation()}
+              className="text-accent hover:underline"
+              title="Pazarda aç"
+            >
+              ↗
+            </a>
+          </span>
+        </div>
       </div>
-    </a>
+    </Link>
   );
 }

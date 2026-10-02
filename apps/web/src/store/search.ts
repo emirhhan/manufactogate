@@ -10,6 +10,7 @@ import {
 } from "@manufactogate/core";
 import { db, type SearchRecord } from "@/lib/db";
 import { browserFingerprinter } from "@/lib/fingerprinter";
+import type { Fingerprinter } from "@manufactogate/core";
 import { getRegistry } from "@/lib/registry";
 
 export interface SearchState {
@@ -52,8 +53,13 @@ export const useSearch = create<SearchState>((set, get) => ({
     set({ current: record, input, markets: {}, listings: {}, clusters: [], similar: [], running: true, abort });
 
     const adapters = marketIds.map((m) => getRegistry().get(m)).filter((a): a is NonNullable<typeof a> => !!a);
+    const imageMarkets = new Set(input.kind === "image" ? adapters.filter((a) => a.meta.capabilities.imageSearch).map((a) => a.id) : []);
+    const fp: Fingerprinter = {
+      forQuery: (i) => browserFingerprinter.forQuery(i),
+      forListing: async (l) => ({ ...(await browserFingerprinter.forListing(l)), ...(imageMarkets.has(l.market) ? { viaImageSearch: true } : {}) }),
+    };
     void (async () => {
-      for await (const ev of runSearch(input, adapters, browserFingerprinter, { signal: abort.signal, maxPerMarket: 40 })) {
+      for await (const ev of runSearch(input, adapters, fp, { signal: abort.signal, maxPerMarket: 40 })) {
         if (abort.signal.aborted) return;
         if (ev.type === "market") set((s) => ({ markets: { ...s.markets, [ev.market]: ev.status } }));
         else if (ev.type === "listing") {

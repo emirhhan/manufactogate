@@ -33,6 +33,14 @@ describe("scoreMatch", () => {
   });
 });
 
+describe("image-search floor", () => {
+  it("lifts market image-search hits to likely when our signals are weak", () => {
+    const m = scoreMatch({ title: "x" }, { title: "完全不同的标题", viaImageSearch: true });
+    expect(confidenceBand(m.score)).toBe("likely");
+    expect(m.reasons).toContain("pazarın görsel araması eşleştirdi");
+  });
+});
+
 describe("clusterCandidates", () => {
   it("groups near-identical candidates and separates similar ones", () => {
     const q = { phash: "ffff0000ffff0000", title: "Wireless earbuds TWS-X15" };

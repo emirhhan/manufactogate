@@ -8,4 +8,6 @@ export interface Fingerprint {
   clip?: Float32Array;
   title?: string;
   modelNumbers?: string[];
+  /** The market's own image search returned this candidate for the query image. */
+  viaImageSearch?: boolean;
 }

@@ -27,7 +27,6 @@ export function Feed() {
   const start = useSearch((s) => s.start);
   const running = useSearch((s) => s.running);
   const enabled = useSettings((s) => s.enabledMarkets);
-  const [showSearch, setShowSearch] = useState(false);
 
   const q = sp.get("q") ?? "";
   const sort = (sp.get("sort") as SortKey | null) ?? "popular";
@@ -64,6 +63,22 @@ export function Feed() {
 
   return (
     <div className="mx-auto max-w-[1440px] px-4 py-5">
+      {/* Hero search: image, link or text across the enabled markets */}
+      {!groupKey && !q && (
+        <div className="mb-5 rounded-xl border border-border bg-surface-2/60 p-5">
+          <h1 className="text-xl font-semibold tracking-tight">Ürünü bul, kaynağına in, maliyetini gör.</h1>
+          <p className="mt-1 text-muted">Bir görsel, bir ürün linki ya da ürün adı. Seçili pazarlarda aynı ürün aranır, fiyatlar ve tedarikçiler yan yana gelir.</p>
+          <div className="mt-4">
+            <SearchBox
+              busy={running}
+              onSubmit={async (input, thumb) => {
+                const id = await start(input, enabled, thumb);
+                nav(`/search/${id}`);
+              }}
+            />
+          </div>
+        </div>
+      )}
       {/* Category rail */}
       <div className="-mx-4 mb-4 overflow-x-auto border-b border-border px-4 pb-3">
         <div className="flex gap-1.5 whitespace-nowrap text-[13px]">
@@ -124,32 +139,14 @@ export function Feed() {
               </ul>
             </div>
           )}
-          <div className="rounded-lg border border-border bg-surface p-3">
-            <div className="font-medium">Görselle kaynak bul</div>
-            <p className="mt-1 text-[12px] text-muted">Elindeki ürünün görselini yükle; 1688, Taobao ve Pinduoduo'da aynı ürünü ve üreticisini arayalım.</p>
-            <button onClick={() => setShowSearch((v) => !v)} className="mt-2 text-[12px] font-medium text-accent hover:underline">
-              {showSearch ? "Kapat" : "Görsel yükle →"}
-            </button>
-          </div>
         </aside>
 
         {/* Main */}
         <main>
-          {showSearch && (
-            <div className="mb-4">
-              <SearchBox
-                busy={running}
-                onSubmit={async (input, thumb) => {
-                  const id = await start(input, enabled, thumb);
-                  nav(`/search/${id}`);
-                }}
-              />
-            </div>
-          )}
           <div className="flex flex-wrap items-center gap-3">
             <div className="min-w-0">
               <h1 className="text-lg font-semibold tracking-tight">
-                {leaf ? leaf.tr : group ? group.tr : "Tüm ürünler"}
+                {leaf ? leaf.tr : group ? group.tr : "Katalog"}
                 {q && <span className="text-muted"> · “{q}”</span>}
               </h1>
               <div className="text-[12px] text-muted tnum">

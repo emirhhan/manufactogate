@@ -21,7 +21,16 @@
 - Kalan: canlı sayfalardan fixture alıp seçicileri doğrulamak (docs/CALIBRATION.md),
   tarayıcıda CLIP embedding.
 
-## Sprint 2: Taobao, Pinduoduo, kümeleme (hafta 5-6)
+## Sprint 2 (başladı): Ürün sayfası ve pazarlar arası karşılaştırma
+
+- Ana sayfada büyük arama kutusu (görsel, link, metin).
+- Gerçek ilan için ürün sayfası: galeri, fiyat merdiveni, satıcı, özellikler, Türkiye'ye maliyet.
+- "Diğer pazarlarda bul ve karşılaştır": ilanın görseliyle 1688 ve Taobao görsel araması,
+  diğerlerinde başlıkla arama; pazar başına en düşük fiyat tablosu, güven skoru.
+- Pazarın görsel araması eşleştirdiği sonuçlar "büyük olasılıkla aynı" bandına yükselir.
+- Kalan: sorguyu pazar diline çevirme, CLIP ile görsel doğrulama, Taobao detay kalibrasyonu.
+
+## Sprint 2 (eski plan): Taobao, Pinduoduo, kümeleme (hafta 5-6)
 
 - Taobao ve Pinduoduo adapter'ları.
 - Üç pazar paralel; kademeli dolan ekran.
