@@ -1,0 +1,88 @@
+@import "tailwindcss";
+
+/* Design tokens from docs/DESIGN_SYSTEM.md. Light by default, dark via data-theme or system. */
+:root {
+  --bg: #fafaf9;
+  --surface: #ffffff;
+  --surface-2: #f3f2ef;
+  --border: #e6e4e0;
+  --text: #1a1a1a;
+  --muted: #6b6b6b;
+  --accent: #1f4fd8;
+  --accent-fg: #ffffff;
+  --success: #1e7f4f;
+  --warning: #b7791f;
+  --danger: #b42318;
+  --ring: #1f4fd8;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0f1115;
+    --surface: #171a21;
+    --surface-2: #1d2129;
+    --border: #262a33;
+    --text: #e8e8e6;
+    --muted: #9a9a98;
+    --accent: #5b8cff;
+    --accent-fg: #0b1020;
+    --success: #4cc38a;
+    --warning: #e0a84a;
+    --danger: #f0665c;
+    --ring: #5b8cff;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0f1115;
+  --surface: #171a21;
+  --surface-2: #1d2129;
+  --border: #262a33;
+  --text: #e8e8e6;
+  --muted: #9a9a98;
+  --accent: #5b8cff;
+  --accent-fg: #0b1020;
+  --success: #4cc38a;
+  --warning: #e0a84a;
+  --danger: #f0665c;
+  --ring: #5b8cff;
+  color-scheme: dark;
+}
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-border: var(--border);
+  --color-text: var(--text);
+  --color-muted: var(--muted);
+  --color-accent: var(--accent);
+  --color-accent-fg: var(--accent-fg);
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --color-danger: var(--danger);
+  --font-sans: "Inter", "InterVariable", ui-sans-serif, system-ui, "Noto Sans CJK SC", "PingFang SC", sans-serif;
+}
+
+html,
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-sans);
+  font-size: 14px;
+  line-height: 1.5;
+  font-feature-settings: "cv11", "ss01";
+}
+.tnum {
+  font-variant-numeric: tabular-nums;
+}
+:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation: none !important;
+    transition: none !important;
+  }
+}

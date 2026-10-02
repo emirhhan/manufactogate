@@ -1,0 +1,20 @@
+{
+  "name": "@manufactogate/extension",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite build --watch",
+    "build": "tsc --noEmit && vite build",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@manufactogate/adapters": "workspace:*",
+    "@manufactogate/core": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/chrome": "^0.1.0",
+    "typescript": "^5.9.0",
+    "vite": "^7.0.0"
+  }
+}

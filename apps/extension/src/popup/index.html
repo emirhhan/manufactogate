@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="tr">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Manufactogate</title>
+    <style>
+      :root { --bg:#fafaf9; --surface:#fff; --border:#e6e4e0; --text:#1a1a1a; --muted:#6b6b6b; --accent:#1f4fd8; --ok:#1e7f4f; --warn:#b7791f; --bad:#b42318; }
+      @media (prefers-color-scheme: dark) { :root { --bg:#0f1115; --surface:#171a21; --border:#262a33; --text:#e8e8e6; --muted:#9a9a98; --accent:#5b8cff; --ok:#4cc38a; --warn:#e0a84a; --bad:#f0665c; } }
+      body { margin:0; width:320px; background:var(--bg); color:var(--text); font:13px/1.5 Inter, system-ui, sans-serif; }
+      header { display:flex; align-items:center; gap:8px; padding:10px 12px; border-bottom:1px solid var(--border); font-weight:600; }
+      header i { width:12px; height:12px; background:var(--accent); border-radius:3px; }
+      header small { margin-left:auto; color:var(--muted); font-weight:400; }
+      ul { list-style:none; margin:0; padding:6px 0; }
+      li { display:flex; align-items:center; gap:8px; padding:7px 12px; }
+      li b { width:90px; font-weight:500; }
+      li span { color:var(--muted); }
+      li .dot { width:8px; height:8px; border-radius:50%; background:var(--border); }
+      .ok .dot { background:var(--ok); } .warn .dot { background:var(--warn); } .bad .dot { background:var(--bad); }
+      li a { margin-left:auto; color:var(--accent); text-decoration:none; font-size:12px; }
+      footer { padding:8px 12px; border-top:1px solid var(--border); color:var(--muted); font-size:12px; }
+      footer a { color:var(--accent); text-decoration:none; }
+    </style>
+  </head>
+  <body>
+    <header><i></i> Manufactogate <small id="ver"></small></header>
+    <ul id="markets"></ul>
+    <footer>Aramalar kendi oturumunla çalışır. <a href="http://localhost:5173" target="_blank" rel="noreferrer">Uygulamayı aç ↗</a></footer>
+    <script type="module" src="./main.ts"></script>
+  </body>
+</html>
