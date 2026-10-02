@@ -1,7 +1,7 @@
 import { REAL_DEF_BY_ID, PORT_NAME, type ExtToWeb, type WebToExt } from "@manufactogate/adapters";
 import type { HealthResult, MarketId, SessionState } from "@manufactogate/core";
 import { EXT_VERSION, MARKET_HOSTS } from "../shared";
-import { captureActiveTab, runExtract } from "./runner";
+import { captureActiveTab, fetchImageAsDataUrl, runExtract } from "./runner";
 
 /**
  * Background worker: answers popup and web-app requests.
@@ -56,6 +56,8 @@ async function handle(msg: WebToExt): Promise<ExtToWeb> {
     }
     case "run":
       return { type: "run:result", result: await runExtract(msg.req) };
+    case "image":
+      return { type: "image:result", dataUrl: await fetchImageAsDataUrl(msg.url) };
     case "capture": {
       const c = await captureActiveTab();
       return { type: "capture:result", ...c };

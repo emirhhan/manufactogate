@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import type { MarketId } from "@manufactogate/core";
 import { ClusterCard } from "@/components/ClusterCard";
+import { MarketResults } from "@/components/MarketResults";
 import { MarketStrip } from "@/components/MarketStrip";
 import { Button, Card, Empty, cn } from "@/components/ui";
 import { getRegistry } from "@/lib/registry";
@@ -103,15 +104,15 @@ export function Results() {
         <main className="space-y-3">
           {clusters.length === 0 && allDone && (
             <Empty
-              title={anyError ? "Bazı pazarlar yanıt vermedi" : "Güvenilir eşleşme bulunamadı"}
+              title={anyError && total === 0 ? "Bazı pazarlar yanıt vermedi" : "Pazarlar arası doğrulanmış eşleşme yok"}
               hint={
-                anyError
+                anyError && total === 0
                   ? "Hatalı pazarları yeniden dene veya diğer pazarlarla devam et."
-                  : "Daha net bir görsel, ürün adı veya model numarası ekleyerek yeniden dene. Benzer ürünler aşağıda listelenir."
+                  : "Her pazarın kendi sonuçları aşağıda. Aynı ürünü pazarlar arasında bağlamak için görselle arama veya model numarası daha güçlü sinyal verir."
               }
             />
           )}
-          {clusters.length === 0 && !allDone && (
+          {clusters.length === 0 && !allDone && total === 0 && (
             <div className="space-y-3">
               {[0, 1, 2].map((i) => (
                 <Card key={i} className="h-40 animate-pulse bg-surface-2" />
@@ -121,6 +122,12 @@ export function Results() {
           {clusters.map((c) => (
             <ClusterCard key={c.id} cluster={c} />
           ))}
+
+          {total > 0 && (
+            <div className="pt-4">
+              <MarketResults listings={s.listings} />
+            </div>
+          )}
 
           {s.similar.length > 0 && (
             <section className="pt-4">

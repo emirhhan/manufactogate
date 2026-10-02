@@ -4,7 +4,7 @@ import { Button, cn } from "./ui";
 
 const ERROR_TEXT: Record<string, { title: string; hint: string }> = {
   LoggedOut: { title: "Giriş yok", hint: "Bu pazara tarayıcıda giriş yapıp yeniden dene." },
-  Captcha: { title: "Doğrulama", hint: "Pazar sayfasındaki doğrulamayı tamamla, sonra yeniden dene." },
+  Captcha: { title: "Doğrulama", hint: "Eklenti pazar sekmesini açık bıraktı. O sekmedeki doğrulamayı tamamla, sonra yeniden dene." },
   SelectorBroken: { title: "Pazar güncellendi", hint: "Adapter düzeltme bekliyor. Sağlık kaydına yazıldı." },
   RateLimited: { title: "Hız sınırı", hint: "Kısa bir bekleme sonrası otomatik denenecek." },
   NotFound: { title: "Bulunamadı", hint: "Bu pazarda sonuç yok." },
@@ -38,9 +38,14 @@ export function MarketStrip({ markets, onRetry }: { markets: Record<string, Mark
             <span className="text-muted tnum">{label}</span>
             {st.state === "error" && (
               <>
-                {(st.type === "LoggedOut" || st.type === "Captcha") && reg.get(id as MarketId)?.meta.loginUrl && (
-                  <a href={reg.get(id as MarketId)!.meta.loginUrl} target="_blank" rel="noreferrer noopener" className="text-accent hover:underline">
-                    {st.type === "LoggedOut" ? "Giriş yap ↗" : "Sayfayı aç ↗"}
+                {(st.type === "LoggedOut" || st.type === "Captcha") && (
+                  <a
+                    href={/^https?:/.test(st.message) ? st.message : (reg.get(id as MarketId)?.meta.loginUrl ?? "#")}
+                    target="_blank"
+                    rel="noreferrer noopener"
+                    className="text-accent hover:underline"
+                  >
+                    {st.type === "LoggedOut" ? "Giriş yap ↗" : "Doğrulamayı çöz ↗"}
                   </a>
                 )}
                 <Button size="sm" variant="ghost" onClick={() => onRetry(id as MarketId)}>

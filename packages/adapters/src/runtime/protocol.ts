@@ -18,6 +18,7 @@ export type WebToExt =
   | { type: "sessions" }
   | { type: "health"; market?: MarketId }
   | { type: "run"; req: ExtractRequest }
+  | { type: "image"; url: string }
   | { type: "capture" };
 
 export type ExtToWeb =
@@ -25,6 +26,7 @@ export type ExtToWeb =
   | { type: "sessions"; sessions: Partial<Record<MarketId, SessionState>> }
   | { type: "health"; health: Partial<Record<MarketId, HealthResult>> }
   | { type: "run:result"; result: ExtractResult | ExtractFailure }
+  | { type: "image:result"; dataUrl: string }
   | { type: "capture:result"; html: string; url: string; market: MarketId | null }
   | { type: "error"; message: string };
 

@@ -51,6 +51,7 @@ export async function runExtract(req: ExtractRequest): Promise<ExtractResult | E
     const t0 = Date.now();
     const timeoutMs = req.timeoutMs ?? (req.kind === "search" ? 25000 : 15000);
     let tabId: number | undefined;
+    let keepTab = false;
     try {
       const tab = await chrome.tabs.create({ url: req.url, active: false });
       tabId = tab.id;
@@ -67,8 +68,12 @@ export async function runExtract(req: ExtractRequest): Promise<ExtractResult | E
           const session = data?.["session"] as SessionState | undefined;
           const current = await chrome.tabs.get(tabId!).catch(() => null);
           const finalUrl = current?.url ?? req.url;
-          if (session === "logged-out") return { ok: true, data: { ...data, items: [] }, finalUrl, tookMs: Date.now() - t0 };
-          if (session === "captcha") return { ok: true, data: { ...data, items: [] }, finalUrl, tookMs: Date.now() - t0 };
+          if (session === "logged-out" || session === "captcha") {
+            // Hand the tab to the user so they can log in or solve the challenge, then retry.
+            keepTab = true;
+            await chrome.tabs.update(tabId!, { active: true }).catch(() => undefined);
+            return { ok: true, data: { ...data, items: [] }, finalUrl, tookMs: Date.now() - t0 };
+          }
           if (req.kind === "health") return { ok: true, data, finalUrl, tookMs: Date.now() - t0 };
           const items = (data?.["items"] as unknown[] | undefined) ?? [];
           const detail = data?.["detail"] ?? data?.["supplier"];
@@ -100,7 +105,7 @@ export async function runExtract(req: ExtractRequest): Promise<ExtractResult | E
       const msg = e instanceof Error ? e.message : String(e);
       return failure(/timeout/.test(msg) ? "Network" : "Network", msg, req.url);
     } finally {
-      if (tabId !== undefined) void chrome.tabs.remove(tabId).catch(() => undefined);
+      if (tabId !== undefined && !keepTab) void chrome.tabs.remove(tabId).catch(() => undefined);
     }
   })();
   inflight.set(market, task);
@@ -119,4 +124,15 @@ export async function captureActiveTab(): Promise<{ html: string; url: string; m
   const html = await exec<string>(tab.id, (() => (window as unknown as { __mgx: { capture: () => string } }).__mgx.capture()) as never);
   const market = (Object.keys(REAL_DEF_BY_ID) as MarketId[]).find((m) => REAL_DEF_BY_ID[m]!.meta.hosts.some((h) => new RegExp(h.replace(/\./g, "\\.").replace(/\*/g, ".*")).test(new URL(tab.url!).host))) ?? null;
   return { html, url: tab.url, market };
+}
+
+/** Fetches a market image with the extension's host permissions and returns it as a data URL. */
+export async function fetchImageAsDataUrl(url: string): Promise<string> {
+  const res = await fetch(url, { credentials: "omit", cache: "force-cache" });
+  if (!res.ok) throw new Error(`image ${res.status}`);
+  const blob = await res.blob();
+  const buf = new Uint8Array(await blob.arrayBuffer());
+  let bin = "";
+  for (let i = 0; i < buf.length; i += 0x8000) bin += String.fromCharCode(...buf.subarray(i, i + 0x8000));
+  return `data:${blob.type || "image/jpeg"};base64,${btoa(bin)}`;
 }

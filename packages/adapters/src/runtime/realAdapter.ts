@@ -68,9 +68,9 @@ function fail(def: RealMarketDef, r: ExtractFailure): never {
   throw new AdapterError(r.error, def.id, r.message);
 }
 
-function assertSession(def: RealMarketDef, s: SessionState) {
-  if (s === "logged-out") throw new AdapterError("LoggedOut", def.id);
-  if (s === "captcha") throw new AdapterError("Captcha", def.id);
+function assertSession(def: RealMarketDef, s: SessionState, url?: string) {
+  if (s === "logged-out") throw new AdapterError("LoggedOut", def.id, url);
+  if (s === "captcha") throw new AdapterError("Captcha", def.id, url);
 }
 
 /** Builds a MarketAdapter from a market definition and a PageRunner (the extension). */
@@ -81,7 +81,7 @@ export function createRealAdapter(def: RealMarketDef, runner: PageRunner): Marke
     const req = { market: def.id, kind: "search" as const, url, want: o?.maxResults ?? 30, ...(imageDataUrl ? { imageDataUrl } : {}) };
     const r = await runner.run<SearchPayload>(req);
     if (!r.ok) fail(def, r);
-    assertSession(def, r.data.session);
+    assertSession(def, r.data.session, r.finalUrl);
     if (r.data.strategy === "none" && r.data.items.length === 0) {
       throw new AdapterError("SelectorBroken", def.id, `no results parsed on ${r.finalUrl}`);
     }
@@ -119,7 +119,7 @@ export function createRealAdapter(def: RealMarketDef, runner: PageRunner): Marke
     async fetchListing(id: string): Promise<RawListingDetail> {
       const r = await runner.run<DetailPayload>({ market: def.id, kind: "detail", url: def.detailUrl(id) });
       if (!r.ok) fail(def, r);
-      assertSession(def, r.data.session);
+      assertSession(def, r.data.session, r.finalUrl);
       const d = r.data.detail && def.toDetail(r.data.detail, id, now());
       if (!d) throw new AdapterError("SelectorBroken", def.id, `detail not parsed on ${r.finalUrl}`);
       return d;
@@ -129,7 +129,7 @@ export function createRealAdapter(def: RealMarketDef, runner: PageRunner): Marke
       if (!def.supplierUrl || !def.toSupplier) throw new AdapterError("NotFound", def.id, "tedarikçi profili desteklenmiyor");
       const r = await runner.run<SupplierPayload>({ market: def.id, kind: "supplier", url: def.supplierUrl(id) });
       if (!r.ok) fail(def, r);
-      assertSession(def, r.data.session);
+      assertSession(def, r.data.session, r.finalUrl);
       const s = r.data.supplier && def.toSupplier(r.data.supplier, id);
       if (!s) throw new AdapterError("SelectorBroken", def.id, `supplier not parsed on ${r.finalUrl}`);
       return s;

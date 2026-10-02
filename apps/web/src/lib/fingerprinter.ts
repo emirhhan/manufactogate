@@ -43,11 +43,26 @@ function loadImage(url: string): Promise<HTMLImageElement> {
   });
 }
 
+import { extensionVersion, sendToExtension } from "./bridge";
+import type { ExtToWeb } from "@manufactogate/adapters";
+
 const cache = new Map<string, Promise<string | undefined>>();
 function cachedPhash(url: string): Promise<string | undefined> {
   let p = cache.get(url);
   if (!p) {
-    p = phashFromUrl(url);
+    p = (async () => {
+      // Market CDNs rarely send CORS headers; the extension can fetch them with host permissions.
+      if (extensionVersion() && /^https?:/.test(url)) {
+        try {
+          const r = await sendToExtension<ExtToWeb & { type: "image:result" }>({ type: "image", url }, 15000);
+          const h = await phashFromUrl(r.dataUrl);
+          if (h) return h;
+        } catch {
+          /* fall through to direct load */
+        }
+      }
+      return phashFromUrl(url);
+    })();
     cache.set(url, p);
   }
   return p;
