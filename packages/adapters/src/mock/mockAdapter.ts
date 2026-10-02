@@ -37,13 +37,8 @@ export function createMockAdapter(
     if (opts.failWith) throw new AdapterError(opts.failWith, id);
     if ((opts.session ?? "logged-in") !== "logged-in")
       throw new AdapterError(opts.session === "captcha" ? "Captcha" : "LoggedOut", id);
-    let all = mockListings(id);
-    if (query) {
-      const q = query.toLowerCase();
-      const filtered = all.filter((l) => l.title.toLowerCase().includes(q) || l.id.includes(q));
-      all = filtered.length ? filtered : all;
-    }
-    const max = o?.maxResults ?? all.length;
+    const all = mockListings(id, query ?? undefined);
+    const max = o?.maxResults ?? Math.min(all.length, 30);
     for (const l of all.slice(0, max)) {
       if (o?.signal?.aborted) return;
       await sleep(latency);

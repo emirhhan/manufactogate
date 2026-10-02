@@ -15,8 +15,9 @@ export function TopBar({ extension }: { extension: { installed: boolean; version
         </Link>
         <nav className="flex items-center gap-1 text-[13px]">
           {[
-            ["/", "Arama"],
-            ["/history", "Geçmiş"],
+            ["/", "Ürünler"],
+            ["/categories", "Kategoriler"],
+            ["/history", "Aramalarım"],
             ["/settings", "Ayarlar"],
           ].map(([to, label]) => (
             <NavLink

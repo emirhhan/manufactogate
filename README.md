@@ -19,7 +19,10 @@ oturumuyla çalışır, veriler kullanıcının makinesinde kalır.
 ## Durum
 
 Sprint 0 tamamlandı: monorepo, çekirdek motor, sahte adapter'lar, web uygulaması ve
-eklenti iskeleti. Uygulama sahte veriyle uçtan uca çalışır. Gerçek 1688 adapter'ı Sprint 1.
+eklenti iskeleti. Web uygulaması e-ticaret görünümünde bir ürün feed'i sunar: 22 ana grup,
+430 kategori, 3.800'den fazla ürün, sayfa başına 30 ürün, kategori ve metin araması, ürün
+sayfasında fiyat zinciri ve Türkiye'ye indirilmiş maliyet. Veri henüz sahte; gerçek 1688
+adapter'ı Sprint 1.
 
 ## Repo yapısı
 

@@ -8,7 +8,8 @@ export * from "./registry";
 export * from "./badges";
 export * from "./markets";
 export * from "./mock/mockAdapter";
-export { MOCK_PRODUCTS } from "./mock/data";
+export { getCatalog, getProduct, listingFor, searchCatalog, productsInLeaf, productsInGroup, leafCounts, CATEGORIES, MARKET_PROFILE, TAXONOMY, getLeaves, getLeaf, slug } from "./mock/data";
+export type { CatalogProduct, Category, CategoryGroup, Leaf } from "./mock/data";
 
 /** Sprint 0: all four wave-1 markets backed by the mock adapter. */
 export function createMockRegistry(opts: Partial<Record<string, MockOptions>> = {}): AdapterRegistry {
