@@ -30,7 +30,10 @@ export function sendToExtension<T extends ExtToWeb = ExtToWeb>(payload: WebToExt
       if (ev.source !== window || !d || d.source !== EXT_SOURCE || d.replyTo !== id) return;
       clearTimeout(timer);
       window.removeEventListener("message", onMsg);
-      if (d.payload?.type === "error") reject(new Error(d.payload.message));
+      if (d.payload?.type === "error") {
+        const m = d.payload.message;
+        reject(new Error(/context invalidated|disconnected|Receiving end does not exist/i.test(m) ? "Eklenti güncellendi; bu sekmeyi yenile (⌘R) ve aramayı tekrar başlat." : m));
+      }
       else resolve(d.payload as T);
     }
     window.addEventListener("message", onMsg);

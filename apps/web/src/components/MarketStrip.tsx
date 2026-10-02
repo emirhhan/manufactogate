@@ -30,7 +30,7 @@ export function MarketStrip({ markets, onRetry }: { markets: Record<string, Mark
         return (
           <div
             key={id}
-            title={st.state === "error" ? ERROR_TEXT[st.type]?.hint : undefined}
+            title={st.state === "error" ? `${ERROR_TEXT[st.type]?.hint ?? ""}\n${st.message}` : undefined}
             className={cn("flex items-center gap-2 rounded-md border border-border bg-surface px-2.5 py-1.5 text-[12px]", st.state === "error" && "border-danger/40")}
           >
             <span className={cn("inline-block h-2 w-2 rounded-full", dot)} />
