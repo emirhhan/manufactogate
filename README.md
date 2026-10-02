@@ -15,14 +15,19 @@ oturumuyla çalışır, veriler kullanıcının makinesinde kalır.
 - Pazar adapter sözleşmesi: [docs/ADAPTER_SPEC.md](docs/ADAPTER_SPEC.md)
 - Tasarım sistemi: [docs/DESIGN_SYSTEM.md](docs/DESIGN_SYSTEM.md)
 - Yol haritası: [docs/ROADMAP.md](docs/ROADMAP.md)
+- Adapter kalibrasyonu: [docs/CALIBRATION.md](docs/CALIBRATION.md)
 
 ## Durum
 
 Sprint 0 tamamlandı: monorepo, çekirdek motor, sahte adapter'lar, web uygulaması ve
 eklenti iskeleti. Web uygulaması e-ticaret görünümünde bir ürün feed'i sunar: 22 ana grup,
 430 kategori, 3.800'den fazla ürün, sayfa başına 30 ürün, kategori ve metin araması, ürün
-sayfasında fiyat zinciri ve Türkiye'ye indirilmiş maliyet. Veri henüz sahte; gerçek 1688
-adapter'ı Sprint 1.
+sayfasında fiyat zinciri ve Türkiye'ye indirilmiş maliyet.
+
+Sprint 1: dört pazar için gerçek adapter'lar yazıldı (1688, Taobao, Pinduoduo, Trendyol).
+Aramalar eklenti üzerinden kullanıcının kendi oturumuyla, arka planda açılan sekmelerde
+çalışır; gömülü JSON öncelikli, DOM kart sezgisi yedekli. Seçiciler henüz canlı sayfalarla
+kalibre edilmedi; süreç [docs/CALIBRATION.md](docs/CALIBRATION.md) içinde.
 
 ## Repo yapısı
 
@@ -50,4 +55,5 @@ pnpm build        # web ve eklenti derlemesi
 
 Eklentiyi yüklemek için: `pnpm build` sonrası Chrome'da `chrome://extensions`, "Geliştirici modu",
 "Paketlenmemiş öğe yükle" ile `apps/extension/dist` klasörünü seç. Web uygulaması açıkken üst
-çubukta "Eklenti bağlı" görünür; eklenti yoksa uygulama sahte veri modunda çalışır.
+çubukta "Gerçek veri · eklenti" görünür; eklenti yoksa uygulama sahte veri modunda çalışır.
+Ayarlar sayfasından veri kaynağı elle seçilebilir ve pazar sağlık kontrolü çalıştırılabilir.

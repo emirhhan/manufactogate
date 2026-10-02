@@ -6,7 +6,7 @@ import { getCountryProfile } from "@manufactogate/country-profiles";
 import { Badge, Button, Card, Empty } from "@/components/ui";
 import { groupOf, leafOf, placeholder, SOURCE_MARKETS, TARGET_MARKET } from "@/lib/catalog";
 import { money, pct } from "@/lib/format";
-import { getRegistry } from "@/lib/registry";
+import { getMockRegistry as getRegistry } from "@/lib/registry";
 import { useSearch } from "@/store/search";
 import { useSettings } from "@/store/settings";
 

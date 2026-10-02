@@ -22,6 +22,8 @@ export interface MarketMeta {
   version: string;
   /** Hosts on which the extension's content script may act for this market. */
   hosts: string[];
+  /** Where the user logs in, when the market needs a session. */
+  loginUrl?: string;
 }
 
 export interface ImageInput {

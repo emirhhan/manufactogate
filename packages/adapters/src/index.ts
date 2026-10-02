@@ -5,6 +5,13 @@ import { createMockAdapter, type MockOptions } from "./mock/mockAdapter";
 import { AdapterRegistry } from "./registry";
 
 export * from "./registry";
+export * from "./dom";
+export * from "./runtime";
+export * from "./real";
+export { def1688, extractor1688, LINK_1688 } from "./cn-1688";
+export { defTaobao, extractorTaobao, LINK_TAOBAO } from "./cn-taobao";
+export { defPinduoduo, extractorPinduoduo, LINK_PDD } from "./cn-pinduoduo";
+export { defTrendyol, extractorTrendyol, LINK_TRENDYOL } from "./tr-trendyol";
 export * from "./badges";
 export * from "./markets";
 export * from "./mock/mockAdapter";

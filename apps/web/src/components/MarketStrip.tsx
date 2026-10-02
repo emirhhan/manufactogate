@@ -37,9 +37,16 @@ export function MarketStrip({ markets, onRetry }: { markets: Record<string, Mark
             <span className="font-medium">{name}</span>
             <span className="text-muted tnum">{label}</span>
             {st.state === "error" && (
-              <Button size="sm" variant="ghost" onClick={() => onRetry(id as MarketId)}>
-                Yeniden dene
-              </Button>
+              <>
+                {(st.type === "LoggedOut" || st.type === "Captcha") && reg.get(id as MarketId)?.meta.loginUrl && (
+                  <a href={reg.get(id as MarketId)!.meta.loginUrl} target="_blank" rel="noreferrer noopener" className="text-accent hover:underline">
+                    {st.type === "LoggedOut" ? "Giriş yap ↗" : "Sayfayı aç ↗"}
+                  </a>
+                )}
+                <Button size="sm" variant="ghost" onClick={() => onRetry(id as MarketId)}>
+                  Yeniden dene
+                </Button>
+              </>
             )}
           </div>
         );

@@ -12,14 +12,14 @@
 
 Çıktı: Tıklanabilir, sahte verili ama gerçek mimarili uygulama.
 
-## Sprint 1: 1688 gerçek arama (hafta 3-4)
+## Sprint 1: Gerçek adapter'lar (hafta 3-4) — kod tamam, kalibrasyon bekliyor
 
-- 1688 adapter: oturum, görselle arama, sonuç ayrıştırma, fixture testleri.
-- Tarayıcıda pHash ve CLIP; model indirme göstergesi.
-- Gerçek sonuçlarla küme kartı ve karşılaştırma tablosu.
-- Gerçek linkler; link ölü kontrolü.
-
-Çıktı: Bir görsel yükle, 1688'de gerçek sonuçlar, gerçek linkler.
+- 1688, Taobao, Pinduoduo, Trendyol adapter'ları: URL'ler, link çözme, gömülü JSON ve
+  DOM kart sezgisi, görselle arama (1688, Taobao), fixture testleri.
+- Eklenti: arka plan sekmesi çalıştırıcı, hız sınırı, sağlık kontrolü, fixture yakalama.
+- Web: eklenti destekli kayıt defteri, veri kaynağı seçimi, giriş yönlendirmesi.
+- Kalan: canlı sayfalardan fixture alıp seçicileri doğrulamak (docs/CALIBRATION.md),
+  tarayıcıda CLIP embedding.
 
 ## Sprint 2: Taobao, Pinduoduo, kümeleme (hafta 5-6)
 

@@ -4,7 +4,7 @@ import { BADGE_LABELS_TR } from "@manufactogate/adapters";
 import type { FeedItem } from "@/lib/catalog";
 import { placeholder } from "@/lib/catalog";
 import { money } from "@/lib/format";
-import { getRegistry } from "@/lib/registry";
+import { getMockRegistry as getRegistry } from "@/lib/registry";
 import { Badge } from "./ui";
 
 export function ProductCard({ item }: { item: FeedItem }) {

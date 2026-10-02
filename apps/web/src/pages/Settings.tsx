@@ -1,14 +1,91 @@
 import { COUNTRY_PROFILES } from "@manufactogate/country-profiles";
-import { Card, cn } from "@/components/ui";
+import { Button, Card, cn } from "@/components/ui";
+import { sendToExtension } from "@/lib/bridge";
 import { getRegistry } from "@/lib/registry";
-import { useSettings } from "@/store/settings";
+import { useExtension } from "@/store/extension";
+import { useSettings, type DataSourcePref } from "@/store/settings";
+import { useState } from "react";
+import type { ExtToWeb } from "@manufactogate/adapters";
+import type { HealthResult, MarketId } from "@manufactogate/core";
+
+const SESSION_TR: Record<string, string> = { "logged-in": "giriş yapıldı", "logged-out": "giriş yok", captcha: "doğrulama bekliyor", unknown: "giriş gerekmez" };
 
 export function Settings() {
   const s = useSettings();
+  const ext = useExtension((x) => x.info);
+  const refreshExt = useExtension((x) => x.set);
   const reg = getRegistry();
+  const [health, setHealth] = useState<Partial<Record<MarketId, HealthResult>>>({});
+  const [checking, setChecking] = useState(false);
+  const runHealth = async () => {
+    setChecking(true);
+    try {
+      const r = await sendToExtension<ExtToWeb & { type: "health" }>({ type: "health" }, 180000);
+      setHealth(r.health);
+      const sess = await sendToExtension<ExtToWeb & { type: "sessions" }>({ type: "sessions" }, 3000);
+      refreshExt({ ...ext, sessions: sess.sessions });
+    } finally {
+      setChecking(false);
+    }
+  };
   return (
     <div className="mx-auto max-w-[960px] px-4 py-8">
       <h1 className="text-xl font-semibold tracking-tight">Ayarlar</h1>
+
+      <section className="mt-6">
+        <h2 className="mb-2 text-[12px] font-medium uppercase tracking-wide text-muted">Veri kaynağı</h2>
+        <Card className="p-4">
+          <div className="flex flex-wrap items-center gap-2">
+            {(
+              [
+                ["auto", "Otomatik"],
+                ["extension", "Gerçek pazarlar (eklenti)"],
+                ["mock", "Sahte veri"],
+              ] as [DataSourcePref, string][]
+            ).map(([k, label]) => (
+              <button
+                key={k}
+                onClick={() => s.setDataSource(k)}
+                className={cn("rounded-md border px-3 py-1.5 text-[13px]", s.dataSource === k ? "border-accent bg-accent/10 text-accent" : "border-border hover:bg-surface-2")}
+              >
+                {label}
+              </button>
+            ))}
+            <span className="ml-auto text-[12px] text-muted">{ext.installed ? `Eklenti v${ext.version} bağlı` : "Eklenti bulunamadı"}</span>
+          </div>
+          <p className="mt-2 text-[12px] text-muted">
+            Gerçek pazar aramaları eklenti üzerinden, senin oturumunla, arka planda açılan sekmelerde çalışır. Eklenti yoksa katalog ve aramalar sahte veriyle sürer.
+          </p>
+          {ext.installed && (
+            <div className="mt-3">
+              <div className="flex items-center justify-between">
+                <div className="text-[12px] font-medium uppercase tracking-wide text-muted">Pazar oturumları ve sağlık</div>
+                <Button size="sm" onClick={() => void runHealth()} disabled={checking}>
+                  {checking ? "Kontrol ediliyor…" : "Sağlık kontrolü çalıştır"}
+                </Button>
+              </div>
+              <ul className="mt-2 divide-y divide-border text-[13px]">
+                {reg.all().map((a) => {
+                  const sess = ext.sessions[a.id] ?? "unknown";
+                  const h = health[a.id];
+                  return (
+                    <li key={a.id} className="flex items-center gap-3 py-2">
+                      <span className={cn("inline-block h-2 w-2 rounded-full", h ? (h.ok ? "bg-success" : "bg-danger") : sess === "logged-in" ? "bg-success" : sess === "logged-out" ? "bg-warning" : "bg-border")} />
+                      <span className="w-24 font-medium">{a.meta.name}</span>
+                      <span className="text-muted">{h ? h.message : SESSION_TR[sess]}</span>
+                      {sess === "logged-out" && a.meta.loginUrl && (
+                        <a href={a.meta.loginUrl} target="_blank" rel="noreferrer noopener" className="ml-auto text-accent hover:underline">
+                          Giriş yap ↗
+                        </a>
+                      )}
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+          )}
+        </Card>
+      </section>
 
       <section className="mt-6">
         <h2 className="mb-2 text-[12px] font-medium uppercase tracking-wide text-muted">Pazarlar</h2>
