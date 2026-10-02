@@ -1,6 +1,6 @@
 import type { LinkInfo, RawListing, RawListingDetail } from "@manufactogate/core";
 import { BADGES_TAOBAO } from "../badges";
-import { clean, extractCards, get, parseCount, parsePrice, readEmbedded } from "../dom";
+import { clean, extractCards, get, parseCount, parsePrice, readEmbedded, textOf } from "../dom";
 import { META_TAOBAO } from "../markets";
 import { detectSession, type PageExtractor, type RealMarketDef, type SearchItem } from "../runtime";
 
@@ -56,10 +56,52 @@ export const extractorTaobao: PageExtractor = {
       }
       if (items.length) return items;
     }
+    // Current card UI: split price (priceInt + priceFloat), realSales, shopNameText, procity.
+    const cards = [...doc.querySelectorAll<HTMLElement>("a[id^='item_id_'], [class*='doubleCardWrapper']")];
+    if (cards.length) {
+      const items: SearchItem[] = [];
+      const seen = new Set<string>();
+      for (const card of cards) {
+        const href = card.getAttribute("href") ?? card.querySelector("a[href]")?.getAttribute("href") ?? "";
+        const m = LINK_TAOBAO.exec(href) ?? /item_id_(\d+)/.exec(card.id);
+        const id = m?.[1];
+        if (!id || seen.has(id)) continue;
+        seen.add(id);
+        // Nested anchors (item link + shop link) get split by the HTML parser: shop info lands in a sibling.
+        const scope = card.closest<HTMLElement>("[class*='search-content-col'], [class*='Content--contentInner'] > *") ?? card.parentElement ?? card;
+        const int = clean(card.querySelector("[class*='priceInt']")?.textContent);
+        const frac = clean(card.querySelector("[class*='priceFloat']")?.textContent);
+        const priceM = /[¥￥]\s*([\d.]+)/.exec(textOf(scope));
+        const price = int ? parsePrice(`${int}${frac}`) : priceM ? parsePrice(priceM[1]) : null;
+        const titleEl = card.querySelector<HTMLElement>("[class*='title']");
+        const title = clean(titleEl?.getAttribute("title") || titleEl?.textContent);
+        const img = card.querySelector<HTMLImageElement>("[class*='mainPic'] img, img[class*='mainPic'], img");
+        const sold = parseCount(clean(scope.querySelector("[class*='realSales']")?.textContent));
+        const shop = clean(scope.querySelector("[class*='shopNameText'], [class*='shopName']")?.textContent);
+        const location = [...scope.querySelectorAll("[class*='procity']")].map((e) => clean(e.textContent)).filter(Boolean).join(" ");
+        const text = textOf(scope);
+        const isTmall = /tmall\.com/.test(href) || text.includes("天猫");
+        items.push({
+          id,
+          url: isTmall ? `https://detail.tmall.com/item.htm?id=${id}` : `https://item.taobao.com/item.htm?id=${id}`,
+          title,
+          image: img?.getAttribute("src") || img?.getAttribute("data-src") || null,
+          price,
+          priceText: price !== null ? String(price) : null,
+          sold,
+          shop: shop || null,
+          location: location || null,
+          badges: [...new Set([...(isTmall ? ["天猫"] : []), ...BADGE_WORDS.filter((w) => text.includes(w))])],
+          text,
+          currency: "CNY",
+        });
+      }
+      if (items.length) return items;
+    }
     return extractCards(doc, {
       link: LINK_TAOBAO,
       titleSelectors: ["[class*='title']", ".Title--title", "a[title]"],
-      shopSelectors: ["[class*='shopName']", "[class*='ShopInfo']", "[class*='shop']"],
+      shopSelectors: ["[class*='shopNameText']", "[class*='shopName']", "[class*='ShopInfo']", "[class*='shop']"],
       locationSelectors: ["[class*='procity']", "[class*='location']", "[class*='Loc']"],
       badgeWords: BADGE_WORDS,
       sold: /((?:\d+(?:[.,]\d+)?)(?:万)?\+?)\s*(?:人付款|人收货|已售)/,

@@ -25,21 +25,28 @@ export const extractorPinduoduo: PageExtractor = {
   },
   search(doc): SearchItem[] {
     const raw = readEmbedded<Record<string, unknown>>(doc, ["window.rawData", "rawData"]);
-    const goods = (get(raw, "stores.store.data.ssrSearchData.goods") ?? get(raw, "store.data.list") ?? get(raw, "goodsList") ?? get(raw, "store.goodsList")) as unknown[] | undefined;
+    const goods = (get(raw, "stores.store.data.ssrListData.list") ??
+      get(raw, "stores.store.dataMap.0.list") ??
+      get(raw, "stores.store.data.ssrSearchData.goods") ??
+      get(raw, "store.data.list") ??
+      get(raw, "goodsList") ??
+      get(raw, "store.goodsList")) as unknown[] | undefined;
     if (Array.isArray(goods) && goods.length) {
       const items: SearchItem[] = [];
       for (const gItem of goods) {
         const r = gItem as Record<string, unknown>;
         const id = String(get(r, "goods_id") ?? get(r, "goodsID") ?? get(r, "goodsId") ?? "");
         if (!/^\d+$/.test(id)) continue;
-        // PDD prices are in fen (1/100 CNY) in raw data.
+        // PDD prices are in fen (1/100 CNY) in raw data; priceInfo is the after-coupon price in yuan.
         const fen = Number(get(r, "price") ?? get(r, "group.price") ?? get(r, "normal_price") ?? NaN);
-        const price = Number.isFinite(fen) ? Math.round(fen) / 100 : parsePrice(String(get(r, "priceInfo") ?? ""));
+        const coupon = parsePrice(String(get(r, "priceInfo") ?? ""));
+        const price = coupon ?? (Number.isFinite(fen) ? Math.round(fen) / 100 : null);
+        const mallId = get(r, "mallEntrance.mall_id") ?? get(r, "mall_id") ?? get(r, "mallId");
         items.push({
           id,
           url: `https://mobile.yangkeduo.com/goods.html?goods_id=${id}`,
           title: clean(String(get(r, "goods_name") ?? get(r, "goodsName") ?? "")),
-          image: (get(r, "hd_thumb_url") as string) ?? (get(r, "thumb_url") as string) ?? (get(r, "thumbUrl") as string) ?? null,
+          image: (get(r, "hd_thumb_url") as string) ?? (get(r, "hdThumbUrl") as string) ?? (get(r, "imgUrl") as string) ?? (get(r, "thumb_url") as string) ?? (get(r, "thumbUrl") as string) ?? null,
           price,
           priceText: price !== null ? String(price) : null,
           sold: parseCount(String(get(r, "sales_tip") ?? get(r, "salesTip") ?? get(r, "cnt") ?? "")),
@@ -48,6 +55,7 @@ export const extractorPinduoduo: PageExtractor = {
           badges: BADGE_WORDS.filter((w) => JSON.stringify(r).includes(w)),
           text: "",
           currency: "CNY",
+          supplierId: mallId !== undefined ? String(mallId) : null,
         });
       }
       if (items.length) return items;

@@ -18,6 +18,17 @@ Her pazar için sıralama aynıdır:
 3. **Hiçbiri:** Sonuç yoksa adapter `SelectorBroken` hatası döner, uygulama "pazar
    güncellendi" der ve sağlık kaydına yazar.
 
+## Kalibrasyon durumu (2026-10-02)
+
+| Pazar | Arama | Detay | Kaynak |
+|---|---|---|---|
+| 1688 | Kalibre: yeni "i18n grid" arayüzü, `data-complete-offer-id` hücreleri | Kalibre: `window.context` içinden regex ile başlık, fiyat, galeri, firma | gerçek sayfa |
+| Taobao | Kalibre: `item_id_*` kartları, bölünmüş fiyat, satış, mağaza, şehir | Henüz gerçek sayfa yok | gerçek sayfa |
+| Pinduoduo | Kalibre: `rawData.stores.store.data.ssrListData.list` | Henüz gerçek sayfa yok | gerçek sayfa |
+| Trendyol | Belgelenmiş yapı, canlı çalıştı (9 sonuç) | Henüz gerçek sayfa yok | sentetik |
+
+Gerçek sayfalar `fixtures/real-*.html` olarak saklanır; izleme kimlikleri temizlenmiştir.
+
 ## İlk kalibrasyon adımları
 
 Sandbox ortamından pazar sitelerine erişilemediği için `fixtures/` altındaki HTML'ler

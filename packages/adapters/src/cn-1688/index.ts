@@ -1,6 +1,6 @@
 import type { LinkInfo, RawListing, RawListingDetail, RawSupplier } from "@manufactogate/core";
 import { BADGES_1688 } from "../badges";
-import { extractCards, get, parseCount, parsePrice, readEmbedded, clean } from "../dom";
+import { clean, extractCards, extractJsonAfter, get, inlineScriptText, parseCount, parsePrice, readEmbedded, scriptField, tryJson } from "../dom";
 import { META_1688 } from "../markets";
 import { detectSession, type RealMarketDef, type SearchItem, type SearchPayload, type DetailPayload, type SupplierPayload } from "../runtime";
 import type { PageExtractor } from "../runtime";
@@ -24,11 +24,49 @@ export const extractor1688: PageExtractor = {
       loginHosts: /login\.1688\.com|login\.taobao\.com|passport/,
       captchaMarkers: ["punish", "nocaptcha", "_____tmd_____", "滑动验证", "验证码"],
       loggedOutMarkers: ["id=\"login-form\"", "密码登录", "扫码登录", "fm-login-id"],
-      loggedInMarkers: ["\"loginId\"", "memberId", "退出", "我的阿里"],
+      loggedInMarkers: ["\"loginId\"", "memberId", "退出", "我的阿里", "data-complete-offer-id", "frontSellerMemberId"],
     });
   },
 
   search(doc): SearchItem[] {
+    // Strategy 0 (current 2026 search UI): grid cells carry the offer id as a data attribute.
+    const cells = [...doc.querySelectorAll<HTMLElement>("[data-complete-offer-id], [data-offer-expose-id]")];
+    if (cells.length) {
+      const items: SearchItem[] = [];
+      const seen = new Set<string>();
+      for (const cell of cells) {
+        const id = cell.getAttribute("data-complete-offer-id") || cell.getAttribute("data-offer-expose-id") || "";
+        if (!/^\d+$/.test(id) || seen.has(id)) continue;
+        seen.add(id);
+        const title = clean(cell.querySelector("[class*='offerTitle'], [class*='title']")?.textContent);
+        const int = clean(cell.querySelector("[class*='priceWrap'] [class*='number']")?.textContent);
+        const frac = clean(cell.querySelector("[class*='priceWrap'] [class*='unit']")?.textContent);
+        const price = int ? parsePrice(`${int}${frac.startsWith(".") ? frac : ""}`) : parsePrice(clean(cell.querySelector("[class*='price']")?.textContent));
+        const img = cell.querySelector<HTMLImageElement>("[class*='pictureWrap'] img, img");
+        const moqText = clean(cell.querySelector("[class*='quantityBegin']")?.textContent);
+        const moq = parseCount(moqText.replace(/[^\d.万]/g, " "));
+        const saleText = clean(cell.querySelector("[class*='saleAmount'], [class*='sale']")?.textContent);
+        const soldM = /(\d[\d.,]*\s*万?\+?)/.exec(saleText);
+        const shop = clean(cell.querySelector("[class*='companyName'], [class*='sellerName'], [class*='shopName']")?.textContent);
+        const text = clean(cell.textContent);
+        items.push({
+          id,
+          url: `https://detail.1688.com/offer/${id}.html`,
+          title,
+          image: img?.getAttribute("src") || img?.getAttribute("data-src") || null,
+          price,
+          priceText: price !== null ? String(price) : null,
+          sold: soldM ? parseCount(soldM[1]) : null,
+          shop: shop || null,
+          location: clean(cell.querySelector("[class*='location'], [class*='address'], [class*='city']")?.textContent) || null,
+          badges: BADGE_WORDS.filter((w) => text.includes(w)),
+          text,
+          currency: "CNY",
+          moq: moq ?? null,
+        });
+      }
+      if (items.length) return items;
+    }
     // Strategy 1: embedded result data (several historical variable names).
     const embedded = readEmbedded<Record<string, unknown>>(doc, ["window.__INIT_DATA__", "window.__INIT_DATA", "window.__INITIAL_STATE__", "__INIT_DATA"]);
     const offers = (get(embedded, "data.offerList") ?? get(embedded, "offerList") ?? get(embedded, "data.data.offerList")) as unknown[] | undefined;
@@ -74,6 +112,45 @@ export const extractor1688: PageExtractor = {
   },
 
   detail(doc) {
+    // Strategy 0 (current detail page): window.context carries tempModel, skuRangePrices and the gallery,
+    // but the object is not strict JSON (numeric keys), so fields are read with targeted regexes.
+    const text = inlineScriptText(doc);
+    const offerTitle = scriptField(text, "offerTitle");
+    if (offerTitle && text.includes("skuRangePrices")) {
+      const ranges = tryJson<{ beginAmount?: number | string; price?: number | string }[]>(extractJsonAfter(text, '"skuRangePrices":')) ?? [];
+      const byQty = new Map<number, number>();
+      for (const r of ranges) {
+        const q = Number(r.beginAmount ?? 1) || 1;
+        const pr = parsePrice(String(r.price ?? "")) ?? 0;
+        if (pr > 0 && (!byQty.has(q) || pr < byQty.get(q)!)) byQty.set(q, pr);
+      }
+      const tiers = [...byQty.entries()].sort((a, b) => a[0] - b[0]).map(([minQty, unitPrice]) => ({ minQty, unitPrice }));
+      const images = tryJson<string[]>(extractJsonAfter(text, '"offerImgList":')) ?? [];
+      const attrs: Record<string, string> = {};
+      for (const item of doc.querySelectorAll(".attr-descriptions .ant-descriptions-item, [class*='attributes'] tr")) {
+        const k = clean(item.querySelector(".ant-descriptions-item-label, th")?.textContent);
+        const v = clean(item.querySelector(".ant-descriptions-item-content, td")?.textContent);
+        if (k && v) attrs[k] = v;
+      }
+      if (Object.keys(attrs).length === 0) {
+        const pa = tryJson<{ name?: string; value?: string }[]>(extractJsonAfter(text, '"productAttributes":')) ?? [];
+        for (const a of pa) if (a.name && a.value) attrs[a.name] = a.value;
+      }
+      const beginNum = Number(scriptField(text, "beginNum") ?? "") || tiers[0]?.minQty || null;
+      return {
+        strategy: "embedded",
+        title: clean(offerTitle),
+        tiers,
+        images,
+        companyName: clean(scriptField(text, "companyName") ?? ""),
+        memberId: scriptField(text, "sellerMemberId") ?? "",
+        location: clean(scriptField(text, "location") ?? ""),
+        sold: Number(scriptField(text, "saledCount") ?? "") || null,
+        moq: beginNum,
+        badges: BADGE_WORDS.filter((w) => text.includes(`"${w}"`) || (doc.body?.textContent ?? "").includes(w)),
+        attributes: attrs,
+      };
+    }
     const data = readEmbedded<Record<string, unknown>>(doc, ["window.__INIT_DATA", "window.__INIT_DATA__", "__INIT_DATA"]);
     if (data) {
       const g = (p: string) => get(data, p);

@@ -189,3 +189,22 @@ function extractJsonAfterLocal(s: string): string | null {
   }
   return null;
 }
+
+/** Concatenated text of all inline scripts; for pages whose embedded state is not valid JSON. */
+export function inlineScriptText(doc: Document): string {
+  return [...doc.querySelectorAll("script:not([src])")].map((s) => s.textContent ?? "").join("\n");
+}
+
+/** Reads `"key":"string"` or `"key":123` from raw script text. */
+export function scriptField(text: string, key: string): string | null {
+  const m = new RegExp(`"${key}"\\s*:\\s*(?:"((?:[^"\\\\]|\\\\.)*)"|(-?\\d+(?:\\.\\d+)?))`).exec(text);
+  if (!m) return null;
+  if (m[1] !== undefined) {
+    try {
+      return JSON.parse(`"${m[1]}"`) as string;
+    } catch {
+      return m[1];
+    }
+  }
+  return m[2] ?? null;
+}
