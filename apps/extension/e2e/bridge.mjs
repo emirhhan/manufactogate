@@ -52,7 +52,8 @@ const d = await ask({ type: "run", req: { market: "cn-1688", kind: "detail", url
 expect("1688 detail ladder", d.result?.ok && d.result.data.detail?.tiers?.length === 3);
 const lo = await ask({ type: "run", req: { market: "cn-1688", kind: "search", url: `${base}/fixtures/1688-loggedout.html`, want: 2, timeoutMs: 8000 } });
 expect("logged-out detection", lo.result?.ok && lo.result.data.session === "logged-out");
-expect("tabs closed", context.pages().length <= 2);
+// The logged-out fixture tab is intentionally left open for the user to log in; everything else closes.
+expect("tabs closed except login tab", context.pages().length <= 3);
 await context.close();
 for (const c of checks) console.log(c.ok ? "PASS" : "FAIL", c.name);
 if (checks.some((c) => !c.ok)) process.exit(1);
