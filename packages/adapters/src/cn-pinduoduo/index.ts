@@ -1,6 +1,6 @@
 import type { LinkInfo, RawListing, RawListingDetail } from "@manufactogate/core";
 import { BADGES_PINDUODUO } from "../badges";
-import { clean, extractCards, get, parseCount, parsePrice, readEmbedded } from "../dom";
+import { clean, extractCards, get, parseCount, parsePrice, readEmbedded, textOf } from "../dom";
 import { META_PINDUODUO } from "../markets";
 import { detectSession, type PageExtractor, type RealMarketDef, type SearchItem } from "../runtime";
 
@@ -84,11 +84,34 @@ export const extractorPinduoduo: PageExtractor = {
         badges: BADGE_WORDS.filter((w) => JSON.stringify(raw).includes(w)),
       };
     }
-    const body = doc.body?.textContent ?? "";
-    const title = clean(doc.querySelector("[class*='goods-name'],[class*='title'],h1")?.textContent) || clean(doc.title);
-    const priceM = /[¥￥]\s*([\d.]+)/.exec(body);
+    // Current goods page renders with rawData=null and hashed class names; read it from text structure.
+    const body = doc.body ? textOf(doc.body) : "";
+    const title =
+      clean(doc.querySelector(".enable-select, [class*='enable-select']")?.textContent) ||
+      clean(doc.querySelector("meta[property='og:title'], meta[name='description']")?.getAttribute("content")) ||
+      (/件\s+(\S[^\s]{6,80})\s+\d+人下单/.exec(body)?.[1] ?? "");
+    const priceM = /券后\s*[¥￥]\s*([\d.]+)/.exec(body) ?? /[¥￥]\s*([\d.]+)/.exec(body);
     if (!title || !priceM) return null;
-    return { strategy: "dom", title, price: Number(priceM[1]), sold: null, images: [], shop: "", badges: BADGE_WORDS.filter((w) => body.includes(w)) };
+    const soldM = /已拼\s*([\d.]+万?\+?)\s*件/.exec(body);
+    const shopM = /(\S{2,40})\s+本店已拼/.exec(body);
+    const attrs: Record<string, string> = {};
+    for (const el of doc.querySelectorAll<HTMLElement>("[aria-label]")) {
+      const kids = [...el.children].filter((c) => c.tagName === "DIV");
+      if (kids.length === 2 && el.getAttribute("aria-label") === `${clean(kids[0]!.textContent)}${clean(kids[1]!.textContent)}`) {
+        attrs[clean(kids[0]!.textContent)] = clean(kids[1]!.textContent);
+      }
+    }
+    const images = [...new Set([...doc.querySelectorAll("img")].map((i) => i.getAttribute("src") ?? "").filter((u) => /img\.pddpic\.com\/(open-gw|mms-material-img|goods|gaudit)/.test(u)))].slice(0, 10);
+    return {
+      strategy: "dom",
+      title,
+      price: Number(priceM[1]),
+      sold: soldM ? parseCount(soldM[1]) : null,
+      images,
+      shop: shopM?.[1] ?? "",
+      badges: BADGE_WORDS.filter((w) => body.includes(w)),
+      attributes: attrs,
+    };
   },
 };
 
@@ -134,6 +157,7 @@ export const defPinduoduo: RealMarketDef = {
       ...(d["shop"] ? { supplierName: String(d["shop"]), supplierId: String(d["shop"]) } : {}),
       badges: (d["badges"] as string[]) ?? [],
       fetchedAt,
+      ...(d["attributes"] ? { attributes: d["attributes"] as Record<string, string> } : {}),
     };
   },
 };

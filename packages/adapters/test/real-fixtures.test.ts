@@ -83,3 +83,38 @@ describe("pinduoduo live page", () => {
     expect(it.supplierId).toBe("241276537");
   });
 });
+
+describe("pinduoduo live detail", () => {
+  it("reads title, coupon price, sales, shop, gallery and attributes from the rendered page", async () => {
+    const a = createRealAdapter(REAL_DEF_BY_ID["cn-pinduoduo"]!, {
+      async run(req) {
+        const doc = load("cn-pinduoduo", "real-detail", req.url);
+        return { ok: true, data: { session: X("cn-pinduoduo").session(doc), strategy: "dom", detail: X("cn-pinduoduo").detail!(doc) } as never, finalUrl: req.url, tookMs: 1 };
+      },
+    });
+    const d = await a.fetchListing("842164999674");
+    expect(d.title).toContain("摩托车头盔");
+    expect(d.price.tiers[0]!.unitPrice).toBe(127);
+    expect(d.sold).toBe(4753);
+    expect(d.supplierName).toBe("玛莎玛莎玛莎");
+    expect(d.images.length).toBeGreaterThan(0);
+    expect(d.attributes?.["外壳材质"]).toBe("ABS");
+  });
+});
+
+describe("trendyol live search", () => {
+  it("reads products from the single-search-result props", () => {
+    const doc = load("tr-trendyol", "real-search", "https://www.trendyol.com/sr?q=kask");
+    const items = X("tr-trendyol").search!(doc) as SearchItem[];
+    expect(items.length).toBeGreaterThanOrEqual(20);
+    const it = items.find((i) => i.id === "963258390")!;
+    expect(it.title).toBe("ENDRO ThunderBolt Mat Siyah Kask");
+    expect(it.price).toBe(2549);
+    expect(it.sold).toBe(844);
+    expect(it.rating).toBeCloseTo(4.56, 1);
+    expect(it.url).toBe("https://www.trendyol.com/endro/thunderbolt-mat-siyah-kask-p-963258390?boutiqueId=61&merchantId=1033437");
+    expect(it.image).toMatch(/^https:\/\/cdn\.dsmcdn\.com\//);
+    expect(it.supplierId).toBe("1033437");
+    expect(items.every((i) => i.price !== null && i.price > 0)).toBe(true);
+  });
+});

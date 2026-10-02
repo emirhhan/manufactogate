@@ -23,21 +23,27 @@ export const extractorTrendyol: PageExtractor = {
     });
   },
   search(doc): SearchItem[] {
-    const state = readEmbedded<Record<string, unknown>>(doc, ["window.__SEARCH_APP_INITIAL_STATE__", "__SEARCH_APP_INITIAL_STATE__"]);
-    const products = (get(state, "products") ?? get(state, "data.products")) as unknown[] | undefined;
+    const state = readEmbedded<Record<string, unknown>>(doc, [
+      '"__single-search-result__PROPS"]',
+      "window.__SEARCH_APP_INITIAL_STATE__",
+      "__SEARCH_APP_INITIAL_STATE__",
+    ]);
+    const products = (get(state, "data.products") ?? get(state, "products")) as unknown[] | undefined;
     if (Array.isArray(products) && products.length) {
       const items: SearchItem[] = [];
       for (const p of products) {
         const r = p as Record<string, unknown>;
         const id = String(get(r, "id") ?? "");
         if (!/^\d+$/.test(id)) continue;
-        const price = Number(get(r, "price.sellingPrice") ?? get(r, "price.discountedPrice") ?? NaN);
+        const price = Number(get(r, "price.discountedPrice") ?? get(r, "price.sellingPrice") ?? get(r, "price.current") ?? NaN);
         const url = String(get(r, "url") ?? "");
-        const img = (get(r, "images.0") as string) ?? "";
+        const img = (get(r, "image") as string) ?? (get(r, "images.0") as string) ?? "";
+        const brand = get(r, "brand");
+        const brandName = typeof brand === "string" ? brand : ((get(r, "brand.name") as string) ?? "");
         items.push({
           id,
           url: url.startsWith("http") ? url : `https://www.trendyol.com${url}`,
-          title: clean(`${get(r, "brand.name") ?? ""} ${get(r, "name") ?? ""}`),
+          title: clean(`${brandName} ${get(r, "name") ?? ""}`),
           image: img ? (img.startsWith("http") ? img : `https://cdn.dsmcdn.com${img}`) : null,
           price: Number.isFinite(price) ? price : null,
           priceText: Number.isFinite(price) ? String(price) : null,
