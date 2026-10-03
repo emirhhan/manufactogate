@@ -12,7 +12,7 @@ import { relevance } from "./relevance";
  */
 export interface FeedSections {
   featured: RawListing[];
-  marginPicks: { listing: RawListing; targetPrice: number; ratio: number }[];
+  marginPicks: { listing: RawListing; targetPrice: number; ratio: number; matchScore: number }[];
   bestSellers: RawListing[];
   fresh: RawListing[];
   categories: { key: string; tr: string; count: number }[];
@@ -51,27 +51,49 @@ export async function buildFeed(targetCountry = "tr", limit = 12): Promise<FeedS
     return 0.35 * fresh + 0.3 * sold + 0.15 * rating + boost;
   };
 
-  // Margin picks: inverted token index over target listings, so cost is ~linear, not sources×targets.
+  // Margin picks. Primary source: stored clusters, where members were matched by image fingerprint
+  // (pHash) plus title, so a badge only appears on a ≥0.85 ("aynı ürün") match across source and target markets.
   const sources = items.filter((l) => reg.get(l.market)?.meta.role !== "target").slice(-1500);
   const targets = items.filter((l) => reg.get(l.market)?.meta.country === targetCountry);
+  const marginPicks: FeedSections["marginPicks"] = [];
+  const picked = new Set<string>();
+  const isTarget = (m: string) => reg.get(m as RawListing["market"])?.meta.country === targetCountry;
+  const consider = (s: RawListing, t: RawListing, matchScore: number) => {
+    const sp = convert(minPrice(s), s.price.currency, t.price.currency);
+    if (!sp || sp <= 0) return;
+    const ratio = minPrice(t) / sp;
+    // ≥2× is interesting; >25× is almost always a mismatch (helmet vs. motorcycle), not a margin.
+    if (ratio < 2 || ratio > 25) return;
+    const key = `${s.market}:${s.id}`;
+    const prev = marginPicks.find((m) => `${m.listing.market}:${m.listing.id}` === key);
+    if (prev) {
+      if (ratio > prev.ratio) Object.assign(prev, { targetPrice: minPrice(t), ratio, matchScore });
+      return;
+    }
+    picked.add(key);
+    marginPicks.push({ listing: s, targetPrice: minPrice(t), ratio, matchScore });
+  };
+  for (const rec of await db.clusters.toArray()) {
+    const ms = rec.cluster.members.filter((m) => m.match.score >= 0.85);
+    const ts = ms.filter((m) => isTarget(m.listing.market));
+    const ss = ms.filter((m) => !isTarget(m.listing.market) && reg.get(m.listing.market)?.meta.role !== "target");
+    for (const a of ss) for (const b of ts) consider(latest.get(`${a.listing.market}:${a.listing.id}`) ?? a.listing, b.listing, Math.min(a.match.score, b.match.score));
+  }
+  // Fallback: strong title agreement (model numbers / ≥3 shared tokens and relevance ≥0.75).
   const tTokens = targets.map((t) => tokensOf(t.title));
   const index = new Map<string, number[]>();
   tTokens.forEach((set, i) => { for (const tok of set) (index.get(tok) ?? index.set(tok, []).get(tok)!).push(i); });
-  const marginPicks: FeedSections["marginPicks"] = [];
   for (const s of sources) {
+    if (picked.has(`${s.market}:${s.id}`)) continue;
     const hits = new Map<number, number>();
     for (const tok of tokensOf(s.title)) for (const i of index.get(tok) ?? []) hits.set(i, (hits.get(i) ?? 0) + 1);
-    let best: { listing: RawListing; targetPrice: number; ratio: number } | null = null;
     for (const [i, overlap] of hits) {
-      if (overlap < 2) continue;
+      if (overlap < 3) continue;
       const t = targets[i]!;
-      if (relevance(s.title, t) < 0.35) continue;
-      const sp = convert(minPrice(s), s.price.currency, t.price.currency);
-      if (!sp || sp <= 0) continue;
-      const ratio = minPrice(t) / sp;
-      if (!best || ratio > best.ratio) best = { listing: s, targetPrice: minPrice(t), ratio };
+      const r = relevance(s.title, t);
+      if (r < 0.75) continue;
+      consider(s, t, r);
     }
-    if (best && best.ratio >= 2) marginPicks.push(best);
   }
   marginPicks.sort((a, b) => b.ratio - a.ratio);
 

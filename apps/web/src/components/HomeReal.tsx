@@ -73,11 +73,13 @@ export function HomeReal() {
       </div>
 
       {feed.marginPicks.length > 0 && (
-        <Section title="Marj adayları" hint="Tedarik fiyatı ile hedef pazardaki benzerin fiyatı arasında en az 2× fark" to="/search">
+        <Section title="Marj adayları" hint="Görsel eşleşmesi ≥%85 olan aynı ürün, hedef pazarda en az 2× fiyata satılıyor">
           {feed.marginPicks.map((m) => (
             <div key={`${m.listing.market}:${m.listing.id}`} className="relative">
               <ResultCard listing={m.listing} />
-              <span className="absolute right-2 top-2 rounded-md bg-success px-1.5 py-0.5 text-[11px] font-semibold text-white tnum">×{m.ratio.toFixed(1)} · {money(m.targetPrice, "TRY")}</span>
+              <span className="absolute right-2 top-2 rounded-md bg-success px-1.5 py-0.5 text-[11px] font-semibold text-white tnum" title={`Eşleşme %${Math.round(m.matchScore * 100)} · hedef pazarda ${money(m.targetPrice, "TRY")} · ×${m.ratio.toFixed(1)}`}>
+                %{Math.round(m.matchScore * 100)} eşleşme · {money(m.targetPrice, "TRY")}
+              </span>
             </div>
           ))}
         </Section>

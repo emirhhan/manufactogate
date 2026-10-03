@@ -20,15 +20,17 @@ function fileToDataUrl(file: File): Promise<string> {
   });
 }
 
-export function SearchBox({ onSubmit, busy }: { onSubmit: (input: SearchInput, thumb?: string) => void; busy?: boolean }) {
+export function SearchBox({ onSubmit, busy, compact = false }: { onSubmit: (input: SearchInput, thumb?: string) => void; busy?: boolean; compact?: boolean }) {
   const [text, setText] = useState("");
   const [image, setImage] = useState<{ dataUrl: string; name: string } | null>(null);
   const [drag, setDrag] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
+  const taRef = useRef<HTMLTextAreaElement>(null);
 
   const takeFile = useCallback(async (file: File | undefined) => {
     if (!file || !file.type.startsWith("image/")) return;
     setImage({ dataUrl: await fileToDataUrl(file), name: file.name });
+    taRef.current?.focus();
   }, []);
 
   const onPaste = (e: ClipboardEvent) => {
@@ -44,6 +46,10 @@ export function SearchBox({ onSubmit, busy }: { onSubmit: (input: SearchInput, t
     void takeFile(e.dataTransfer.files[0]);
   };
 
+  const d = detect(text);
+  const mode: "image" | "link" | "text" | "empty" = image ? "image" : !text.trim() ? "empty" : d.kind === "link" ? "link" : "text";
+  const linkMarket = mode === "link" && d.kind === "link" ? getRegistry().resolve(d.url)?.adapter.meta.name : undefined;
+
   const submit = () => {
     if (busy) return;
     if (image) {
@@ -52,16 +58,13 @@ export function SearchBox({ onSubmit, busy }: { onSubmit: (input: SearchInput, t
       return;
     }
     if (!text.trim()) return;
-    const d = detect(text);
     if (d.kind === "link") {
-      const hit = getRegistry().resolve(d.url);
-      if (!hit) {
-        onSubmit({ kind: "text", query: d.url });
-        return;
-      }
-      onSubmit({ kind: "link", url: d.url });
+      if (!getRegistry().resolve(d.url)) onSubmit({ kind: "text", query: d.url });
+      else onSubmit({ kind: "link", url: d.url });
     } else if (d.kind === "text") onSubmit({ kind: "text", query: d.query });
   };
+
+  const examples = ["motosiklet kaskı", "kablosuz kulaklık", "airfryer 5L", "yoga matı", "köpek tasması", "güneş gözlüğü"];
 
   return (
     <div
@@ -71,32 +74,37 @@ export function SearchBox({ onSubmit, busy }: { onSubmit: (input: SearchInput, t
       }}
       onDragLeave={() => setDrag(false)}
       onDrop={onDrop}
-      className={cn("rounded-xl border bg-surface p-3 shadow-sm transition-colors", drag ? "border-accent" : "border-border")}
+      className="relative"
     >
-      <div className="flex gap-3">
+      <div
+        className={cn(
+          "flex items-stretch gap-2 rounded-2xl border bg-surface p-2 shadow-[0_8px_30px_-12px_rgba(0,0,0,.25)] transition-all",
+          drag ? "border-accent ring-4 ring-accent/15" : "border-border focus-within:border-accent focus-within:ring-4 focus-within:ring-accent/10",
+        )}
+      >
+        {/* Image slot */}
         {image ? (
-          <div className="relative h-24 w-24 shrink-0 overflow-hidden rounded-md border border-border">
+          <div className="relative h-14 w-14 shrink-0 self-center overflow-hidden rounded-xl border border-border">
             <img src={image.dataUrl} alt={image.name} className="h-full w-full object-cover" />
-            <button
-              onClick={() => setImage(null)}
-              className="absolute right-1 top-1 rounded bg-surface/90 px-1 text-[11px] text-muted hover:text-text"
-              aria-label="Görseli kaldır"
-            >
+            <button onClick={() => setImage(null)} aria-label="Görseli kaldır" className="absolute right-0 top-0 grid h-5 w-5 place-items-center rounded-bl-md bg-black/60 text-[11px] text-white hover:bg-black/80">
               ✕
             </button>
           </div>
         ) : (
           <button
             onClick={() => fileRef.current?.click()}
-            className="flex h-24 w-24 shrink-0 flex-col items-center justify-center rounded-md border border-dashed border-border text-[12px] text-muted hover:bg-surface-2"
+            title="Görselle ara"
+            className="flex h-14 w-14 shrink-0 flex-col items-center justify-center gap-0.5 self-center rounded-xl border border-dashed border-border text-muted hover:border-accent hover:bg-accent/5 hover:text-accent"
           >
-            <span className="text-lg leading-none">+</span>
-            Görsel
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6"><rect x="3" y="5" width="18" height="14" rx="2" /><circle cx="9" cy="10" r="1.6" /><path d="m21 16-5-5-8 8" /></svg>
+            <span className="text-[10px] leading-none">Görsel</span>
           </button>
         )}
         <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={(e) => void takeFile(e.target.files?.[0])} />
-        <div className="flex min-w-0 flex-1 flex-col gap-2">
+
+        <div className="flex min-w-0 flex-1 items-center">
           <textarea
+            ref={taRef}
             value={text}
             onChange={(e) => setText(e.target.value)}
             onPaste={onPaste}
@@ -106,19 +114,35 @@ export function SearchBox({ onSubmit, busy }: { onSubmit: (input: SearchInput, t
                 submit();
               }
             }}
-            rows={3}
-            placeholder={image ? "İsteğe bağlı: ürün adı veya model numarası (eşleşmeyi güçlendirir)" : "Görsel sürükle veya yapıştır, ürün linki yapıştır ya da ürün adı yaz…"}
-            className="w-full resize-none rounded-md border border-border bg-bg px-3 py-2 outline-none placeholder:text-muted focus:border-accent"
+            rows={compact ? 1 : 2}
+            placeholder={image ? "İsteğe bağlı: ürün adı veya model numarası" : "Ürün adı yaz, ürün linki yapıştır ya da görsel bırak…"}
+            className="w-full resize-none bg-transparent px-2 py-2 text-[15px] leading-snug outline-none placeholder:text-muted"
           />
-          <div className="flex items-center justify-between text-[12px] text-muted">
-            <span>
-              <Kbd>Enter</Kbd> ara · <Kbd>Shift</Kbd>+<Kbd>Enter</Kbd> yeni satır · görsel yapıştırmak için <Kbd>Ctrl</Kbd>+<Kbd>V</Kbd>
-            </span>
-            <Button variant="primary" onClick={submit} disabled={busy || (!image && !text.trim())}>
-              {busy ? "Aranıyor…" : "Ara"}
-            </Button>
-          </div>
         </div>
+
+        <Button variant="primary" onClick={submit} disabled={busy || (!image && !text.trim())} className="h-auto min-w-[96px] self-stretch rounded-xl px-5 text-[14px]">
+          {busy ? "Aranıyor…" : mode === "image" ? "Görselle ara" : mode === "link" ? "Linki çöz" : "Ara"}
+        </Button>
+      </div>
+
+      <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1.5 px-1 text-[12px] text-muted">
+        <span className={cn("inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5", mode === "empty" ? "border-border" : "border-accent/40 bg-accent/10 text-accent")}>
+          <span className={cn("h-1.5 w-1.5 rounded-full", mode === "empty" ? "bg-border" : "bg-accent")} />
+          {mode === "image" ? "Görsel eşleştirme: pazarların görselle arama özelliği + pHash" : mode === "link" ? (linkMarket ? `${linkMarket} linki: ürün okunur, diğer pazarlarda aranır` : "Link tanınmadı; metin olarak aranır") : mode === "text" ? "Metin: Türkçe → Çince çeviri ile tüm seçili pazarlar" : "Metin, link veya görsel"}
+        </span>
+        {mode === "empty" && !compact && (
+          <span className="flex flex-wrap items-center gap-1.5">
+            <span>Dene:</span>
+            {examples.map((x) => (
+              <button key={x} onClick={() => { setText(x); taRef.current?.focus(); }} className="rounded-full border border-border px-2 py-0.5 hover:border-accent hover:text-accent">
+                {x}
+              </button>
+            ))}
+          </span>
+        )}
+        <span className="ml-auto hidden sm:inline">
+          <Kbd>Enter</Kbd> ara · <Kbd>Ctrl</Kbd>+<Kbd>V</Kbd> görsel yapıştır
+        </span>
       </div>
     </div>
   );

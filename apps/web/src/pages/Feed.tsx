@@ -3,6 +3,9 @@ import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom"
 import { TAXONOMY } from "@manufactogate/adapters";
 import { Pagination } from "@/components/Pagination";
 import { ProductCard } from "@/components/ProductCard";
+import { ResultCard } from "@/components/ResultCard";
+import { Button } from "@/components/ui";
+import { loadRealCatalog, queryRealCatalog, type RealFeedPage } from "@/lib/realCatalog";
 import { SearchBox } from "@/components/SearchBox";
 import { Empty, cn } from "@/components/ui";
 import { groupOf, leafOf, leavesOf, queryFeed, type SortKey } from "@/lib/catalog";
@@ -64,12 +67,25 @@ export function Feed() {
   }, [leaf, group]);
 
   const real = getDataSource() === "extension";
-  // In real-data mode a category is a live search across the enabled markets, not a mock catalog page.
+  // Real-data mode: the catalog is every listing pulled so far, classified into the taxonomy on this device.
+  const [realItems, setRealItems] = useState<Awaited<ReturnType<typeof loadRealCatalog>> | null>(null);
   useEffect(() => {
-    if (!real || !leaf || running) return;
-    const q = leaf.tr;
-    void start({ kind: "text", query: q }, enabled).then((id) => nav(`/search/${id}`, { replace: true }));
-  }, [real, leafKey]);
+    if (!real) return;
+    let alive = true;
+    void loadRealCatalog().then((it) => alive && setRealItems(it));
+    return () => { alive = false; };
+  }, [real, running]);
+  const realFeed: RealFeedPage | null = useMemo(() => (real && realItems ? queryRealCatalog(realItems, fq) : null), [real, realItems, fq]);
+  const liveSearch = async () => {
+    if (running) return;
+    const query = q || leaf?.tr || group?.tr;
+    if (!query) return;
+    const id = await start({ kind: "text", query }, enabled);
+    nav(`/search/${id}`);
+  };
+  const total = realFeed ? realFeed.total : feed.total;
+  const pageNo = realFeed ? realFeed.page : feed.page;
+  const pages = realFeed ? realFeed.pages : feed.pages;
 
   return (
     <div className="mx-auto max-w-[1440px] px-4 py-5">
@@ -121,7 +137,7 @@ export function Feed() {
           {real && (
             <div className="rounded-lg border border-accent/30 bg-accent/5 p-3 text-[12px]">
               <div className="font-medium text-accent">Gerçek veri modu</div>
-              <p className="mt-1 text-muted">Bir kategori seçmek seçili pazarlarda canlı arama başlatır. Aşağıdaki katalog yalnızca örnektir.</p>
+              <p className="mt-1 text-muted">Katalog, pazarlardan çektiğin {realItems?.length.toLocaleString("tr-TR") ?? "…"} gerçek ilandan oluşur ve kategoriye göre süzülür. Daha fazlası için canlı arama başlat.</p>
             </div>
           )}
           {group ? (
@@ -139,7 +155,7 @@ export function Feed() {
                       to={`/c/${group.key}/${l.key}${q ? `?q=${encodeURIComponent(q)}` : ""}`}
                       className={cn("block rounded-md px-2 py-1", leafKey === l.key ? "bg-surface-2 font-medium" : "text-muted hover:bg-surface-2 hover:text-text")}
                     >
-                      {l.tr}
+                      <span className="flex justify-between gap-2"><span>{l.tr}</span>{realFeed && realFeed.leafCounts[l.key] ? <span className="text-[11px] text-muted tnum">{realFeed.leafCounts[l.key]}</span> : null}</span>
                     </Link>
                   </li>
                 ))}
@@ -153,7 +169,7 @@ export function Feed() {
                   <li key={g.key}>
                     <Link to={`/c/${g.key}`} className="flex justify-between rounded-md px-2 py-1 text-muted hover:bg-surface-2 hover:text-text">
                       <span>{g.tr}</span>
-                      <span className="text-[11px] tnum">{g.leaves.length}</span>
+                      <span className="text-[11px] tnum">{realFeed ? (realFeed.groupCounts[g.key] ?? 0) : g.leaves.length}</span>
                     </Link>
                   </li>
                 ))}
@@ -171,7 +187,7 @@ export function Feed() {
                 {q && <span className="text-muted"> · “{q}”</span>}
               </h1>
               <div className="text-[12px] text-muted tnum">
-                {feed.total.toLocaleString("tr-TR")} ürün · sayfa {feed.page}/{feed.pages}
+                {total.toLocaleString("tr-TR")} ürün · sayfa {pageNo}/{pages}{realFeed ? " · gerçek ilanlar" : ""}
               </div>
             </div>
             <form
@@ -187,6 +203,11 @@ export function Feed() {
                 placeholder={leaf ? `${leaf.tr} içinde ara` : group ? `${group.tr} içinde ara` : "Ürün, model veya kategori ara"}
                 className="h-9 w-64 rounded-md border border-border bg-bg px-3 text-[13px] outline-none placeholder:text-muted focus:border-accent"
               />
+              {real && (leaf || group || q) && (
+                <Button variant="primary" type="button" onClick={() => void liveSearch()} disabled={running}>
+                  {running ? "Aranıyor…" : `Pazarlarda canlı ara`}
+                </Button>
+              )}
               <select value={sort} onChange={(e) => setParam("sort", e.target.value)} className="h-9 rounded-md border border-border bg-surface px-2 text-[13px]">
                 {SORTS.map((s) => (
                   <option key={s.key} value={s.key}>
@@ -197,7 +218,19 @@ export function Feed() {
             </form>
           </div>
 
-          {feed.items.length === 0 ? (
+          {realFeed ? (
+            realFeed.items.length === 0 ? (
+              <div className="mt-6">
+                <Empty title="Bu kategoride henüz gerçek ilan yok" hint="“Pazarlarda canlı ara” ile seçili pazarlardan çek; sonuçlar buraya da düşer." />
+              </div>
+            ) : (
+              <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5">
+                {realFeed.items.map((l) => (
+                  <ResultCard key={`${l.market}:${l.id}`} listing={l} />
+                ))}
+              </div>
+            )
+          ) : feed.items.length === 0 ? (
             <div className="mt-6">
               <Empty title="Bu filtrelerle ürün yok" hint="Arama terimini kısalt veya üst kategoriye dön." />
             </div>
@@ -209,7 +242,7 @@ export function Feed() {
             </div>
           )}
           <div className="mt-6">
-            <Pagination page={feed.page} pages={feed.pages} onPage={onPage} />
+            <Pagination page={pageNo} pages={pages} onPage={onPage} />
           </div>
         </main>
       </div>
