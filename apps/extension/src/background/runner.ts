@@ -73,19 +73,20 @@ export async function runExtract(req: ExtractRequest): Promise<ExtractResult | E
         let last = "";
         let stable = 0;
         let deadline = t0 + timeoutMs;
+        let scrollIdx = 0;
         while (Date.now() < deadline) {
+          // Human-like scroll pass (only while the tab is in the background): a few viewport steps, then back to top.
+          const activeNow = (await chrome.tabs.get(tabId!).catch(() => null))?.active;
+          if (!activeNow && req.kind === "search" && scrollIdx <= 4) {
+            const step = scrollIdx === 4 ? -1 : scrollIdx + 1;
+            await exec<void>(tabId!, ((st: number) => (window as unknown as { __mgx?: { scrollStep: (n: number) => void } }).__mgx?.scrollStep(st)) as never, [step]).catch(() => undefined);
+            scrollIdx++;
+          }
           let data = await exec<Record<string, unknown> | null>(
             tabId!,
             ((m: MarketId, k: string) => {
               const w = window as unknown as { __mgx?: { run: (m: MarketId, k: string) => unknown } };
-              if (!w.__mgx) return null;
-              // Nudge lazy lists: most result pages render more cards as you scroll.
-              try {
-                window.scrollTo(0, document.body.scrollHeight);
-              } catch {
-                /* ignore */
-              }
-              return w.__mgx.run(m, k);
+              return w.__mgx ? w.__mgx.run(m, k) : null;
             }) as never,
             [market, req.kind],
           ).catch(() => null);
@@ -140,6 +141,20 @@ export async function runExtract(req: ExtractRequest): Promise<ExtractResult | E
         return { ok: true, data, finalUrl: current?.url ?? req.url, tookMs: Date.now() - t0 };
       };
 
+      if (req.typeQuery) {
+        // Type the query into the site's own search box and submit it, like a person would.
+        await sleep(600 + Math.random() * 600);
+        const r = await exec<string>(tabId, ((q: string) => (window as unknown as { __mgx: { typeQuery: (q: string) => Promise<string> } }).__mgx.typeQuery(q)) as never, [req.typeQuery]).catch(() => "no-input");
+        if (r !== "ok") return failure("SelectorBroken", "arama kutusu bulunamadı", req.url);
+        const before = (await chrome.tabs.get(tabId).catch(() => null))?.url;
+        for (let i = 0; i < 20; i++) {
+          await sleep(500);
+          const now = (await chrome.tabs.get(tabId).catch(() => null))?.url;
+          if (now && now !== before) break;
+        }
+        await waitForLoad(tabId, 12000).catch(() => undefined);
+        await chrome.scripting.executeScript({ target: { tabId }, files: ["extract.js"] }).catch(() => undefined);
+      }
       if (req.imageDataUrl) {
         // The upload widget mounts late on these pages: retry the file input for a few seconds.
         let r = "no-input";

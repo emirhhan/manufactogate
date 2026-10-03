@@ -23,6 +23,8 @@ export interface GenericDef {
   badgeMap?: Record<string, NormalizedBadge>;
   healthQuery: string;
   captchaMarkers?: string[];
+  /** Home page whose search box is used for human-like searches (defaults to www.<host>). */
+  homeUrl?: string;
 }
 
 export function makeDef(g: GenericDef): RealMarketDef {
@@ -72,6 +74,7 @@ export function makeDef(g: GenericDef): RealMarketDef {
     healthQuery: g.healthQuery,
     searchUrl: (q, page = 1) => g.searchUrl(q, page),
     maxPages: 2,
+    humanSearchHome: g.homeUrl ?? `https://${(g.hosts[0] ?? "").replace("*.", "www.")}/`,
     detailUrl,
     resolveLink(url): LinkInfo | null {
       if (!g.hosts.some((h) => url.includes(h.replace("*.", "")))) return null;

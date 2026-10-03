@@ -16,6 +16,7 @@ oturumuyla çalışır, veriler kullanıcının makinesinde kalır.
 - Tasarım sistemi: [docs/DESIGN_SYSTEM.md](docs/DESIGN_SYSTEM.md)
 - Yol haritası: [docs/ROADMAP.md](docs/ROADMAP.md)
 - Adapter kalibrasyonu: [docs/CALIBRATION.md](docs/CALIBRATION.md)
+- Plan ile gerçek durum: [docs/STATUS.md](docs/STATUS.md)
 
 ## Durum
 

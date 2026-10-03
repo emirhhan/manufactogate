@@ -15,6 +15,8 @@ export interface ExtractRequest {
   url: string;
   /** Optional image to feed into the page's own file input (data URL). */
   imageDataUrl?: string;
+  /** Type this query into the page's search box and submit it like a person would, instead of a search URL. */
+  typeQuery?: string;
   /** Milliseconds to wait for results to settle. */
   timeoutMs?: number;
   /** How many results satisfy the request. */

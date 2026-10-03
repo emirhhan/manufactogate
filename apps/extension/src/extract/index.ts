@@ -11,6 +11,8 @@ type Kind = "search" | "detail" | "supplier" | "health";
 interface Mgx {
   run(market: MarketId, kind: Kind): unknown;
   setImage(market: MarketId, dataUrl: string): "ok" | "ok-paste" | "no-input";
+  typeQuery(query: string): Promise<"ok" | "no-input">;
+  scrollStep(step: number): void;
   capture(): string;
 }
 
@@ -89,6 +91,74 @@ function setImage(market: MarketId, dataUrl: string): "ok" | "ok-paste" | "no-in
   return "no-input";
 }
 
+function findSearchBox(): HTMLInputElement | HTMLTextAreaElement | null {
+  const sels = [
+    "input[type=search]",
+    "input[name='q']", "input[name='keywords']", "input[name='keyword']", "input[name='search_key']", "input[name='SearchText']", "input[name='searchkey']", "input[name='k']", "input[name='_nkw']", "input[name='text']", "input[name='search']", "input[name='p']",
+    "input[id*='search' i]", "input[class*='search' i]", "input[placeholder*='搜' i]", "input[placeholder*='ara' i]", "input[placeholder*='search' i]", "input[placeholder*='cari' i]", "input[placeholder*='検索' i]", "input[placeholder*='검색' i]", "input[placeholder*='поиск' i]",
+  ];
+  for (const sel of sels) {
+    const el = document.querySelector<HTMLInputElement>(sel);
+    if (el && el.offsetParent !== null && !el.disabled) return el;
+  }
+  return null;
+}
+
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+/** Types a query with human-like pacing and submits with Enter (plus form submit as a fallback). */
+async function typeQuery(query: string): Promise<"ok" | "no-input"> {
+  const box = findSearchBox();
+  if (!box) return "no-input";
+  box.focus();
+  box.click();
+  const setter = Object.getOwnPropertyDescriptor(Object.getPrototypeOf(box), "value")?.set;
+  const setValue = (v: string) => {
+    if (setter) setter.call(box, v);
+    else box.value = v;
+    box.dispatchEvent(new Event("input", { bubbles: true }));
+  };
+  setValue("");
+  await sleep(200 + Math.random() * 200);
+  let cur = "";
+  for (const ch of query) {
+    cur += ch;
+    box.dispatchEvent(new KeyboardEvent("keydown", { key: ch, bubbles: true }));
+    setValue(cur);
+    box.dispatchEvent(new KeyboardEvent("keyup", { key: ch, bubbles: true }));
+    await sleep(50 + Math.random() * 90);
+  }
+  await sleep(300 + Math.random() * 300);
+  const enter = { key: "Enter", code: "Enter", keyCode: 13, which: 13, bubbles: true, cancelable: true } as KeyboardEventInit;
+  const prevented = !box.dispatchEvent(new KeyboardEvent("keydown", enter));
+  box.dispatchEvent(new KeyboardEvent("keypress", enter));
+  box.dispatchEvent(new KeyboardEvent("keyup", enter));
+  if (!prevented) {
+    const form = box.closest("form");
+    if (form) {
+      await sleep(150);
+      if (typeof form.requestSubmit === "function") form.requestSubmit();
+      else form.submit();
+    } else {
+      const btn = document.querySelector<HTMLElement>("button[type=submit], [class*='search'] button, [class*='search-btn'], [class*='searchBtn'], [class*='btn-search']");
+      btn?.click();
+    }
+  }
+  return "ok";
+}
+
+/** One scroll step of a human-like pass: down by a viewport, back to top on the final step. */
+function scrollStep(step: number): void {
+  try {
+    const vh = window.innerHeight || 800;
+    const max = Math.max(0, document.body.scrollHeight - vh);
+    if (step < 0) window.scrollTo({ top: 0, behavior: "auto" });
+    else window.scrollTo({ top: Math.min(max, vh * step), behavior: "auto" });
+  } catch {
+    /* ignore */
+  }
+}
+
 /** Page HTML for calibration fixtures. Inline scripts are kept (they hold embedded state); cookies are never in HTML. */
 function capture(): string {
   const clone = document.documentElement.cloneNode(true) as HTMLElement;
@@ -96,4 +166,4 @@ function capture(): string {
   return `<!doctype html>\n` + clone.outerHTML;
 }
 
-(window as unknown as { __mgx: Mgx }).__mgx = { run, setImage, capture };
+(window as unknown as { __mgx: Mgx }).__mgx = { run, setImage, typeQuery, scrollStep, capture };

@@ -52,6 +52,8 @@ export interface RealMarketDef {
   searchUrl(query: string, page?: number): string;
   /** How many result pages a text search may walk (default 1). */
   maxPages?: number;
+  /** When set, the first page is searched by typing into this page's search box (human-like) instead of a URL. */
+  humanSearchHome?: string;
   /** Page for image search. `upload: false` means the URL already carries the image (no file injection). */
   imageSearchUrl?: (input: ImageInput) => { url: string; upload: boolean };
   detailUrl(id: string): string;
@@ -79,8 +81,8 @@ function assertSession(def: RealMarketDef, s: SessionState, url?: string) {
 export function createRealAdapter(def: RealMarketDef, runner: PageRunner): MarketAdapter {
   const now = () => new Date().toISOString();
 
-  async function* searchPage(url: string, imageDataUrl: string | undefined, want: number, seen: Set<string>, o?: SearchOptions): AsyncIterable<RawListing> {
-    const req = { market: def.id, kind: "search" as const, url, want, ...(imageDataUrl ? { imageDataUrl } : {}) };
+  async function* searchPage(url: string, imageDataUrl: string | undefined, want: number, seen: Set<string>, o?: SearchOptions, typeQuery?: string): AsyncIterable<RawListing> {
+    const req = { market: def.id, kind: "search" as const, url, want, ...(imageDataUrl ? { imageDataUrl } : {}), ...(typeQuery ? { typeQuery } : {}) };
     const r = await runner.run<SearchPayload>(req);
     if (!r.ok) fail(def, r);
     assertSession(def, r.data.session, r.finalUrl);
@@ -112,7 +114,8 @@ export function createRealAdapter(def: RealMarketDef, runner: PageRunner): Marke
     let n = 0;
     for (let page = 1; page <= pages && n < max; page++) {
       let got = 0;
-      for await (const l of searchPage(def.searchUrl(query, page), undefined, Math.min(max - n, 60), seen, o)) {
+      const human = page === 1 && def.humanSearchHome;
+      for await (const l of searchPage(human ? def.humanSearchHome! : def.searchUrl(query, page), undefined, Math.min(max - n, 60), seen, o, human ? query : undefined)) {
         got++;
         yield l;
         if (++n >= max) return;

@@ -1,6 +1,6 @@
 import type { MarketId } from "@manufactogate/core";
 
-export const EXT_VERSION = "0.5.1";
+export const EXT_VERSION = "0.6.0";
 
 /** Login-cookie heuristics for quick session display in the popup (no tab needed). */
 export const MARKET_HOSTS: Partial<Record<MarketId, { host: string; loginCookie?: string }>> = {

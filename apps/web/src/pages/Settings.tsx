@@ -18,6 +18,30 @@ export function Settings() {
   const reg = getRegistry();
   const [health, setHealth] = useState<Partial<Record<MarketId, HealthResult>>>({});
   const [checking, setChecking] = useState(false);
+  const [progress, setProgress] = useState<string>("");
+  /** Checks every enabled market one after another with a pause, like a person opening each site. */
+  const runRound = async () => {
+    setChecking(true);
+    try {
+      const targets = reg.all().filter((a) => s.enabledMarkets.includes(a.id) || !a.meta.version.includes("beta"));
+      for (let i = 0; i < targets.length; i++) {
+        const a = targets[i]!;
+        setProgress(`${i + 1}/${targets.length} · ${a.meta.name}`);
+        try {
+          const r = await sendToExtension<ExtToWeb & { type: "health" }>({ type: "health", market: a.id }, 120000);
+          setHealth((prev) => ({ ...prev, ...r.health }));
+        } catch (e) {
+          setHealth((prev) => ({ ...prev, [a.id]: { ok: false, checkedAt: new Date().toISOString(), message: e instanceof Error ? e.message : String(e) } }));
+        }
+        await new Promise((r) => setTimeout(r, 3000 + Math.random() * 2000));
+      }
+      const sess = await sendToExtension<ExtToWeb & { type: "sessions" }>({ type: "sessions" }, 3000);
+      refreshExt({ ...ext, sessions: sess.sessions });
+    } finally {
+      setChecking(false);
+      setProgress("");
+    }
+  };
   const runHealth = async () => {
     setChecking(true);
     try {
@@ -61,9 +85,15 @@ export function Settings() {
             <div className="mt-3">
               <div className="flex items-center justify-between">
                 <div className="text-[12px] font-medium uppercase tracking-wide text-muted">Pazar oturumları ve sağlık</div>
-                <Button size="sm" onClick={() => void runHealth()} disabled={checking}>
-                  {checking ? "Kontrol ediliyor…" : "Sağlık kontrolü çalıştır"}
-                </Button>
+                <div className="flex items-center gap-2">
+                  {progress && <span className="text-[12px] text-muted tnum">{progress}</span>}
+                  <Button size="sm" onClick={() => void runHealth()} disabled={checking}>
+                    {checking ? "Kontrol ediliyor…" : "Ana 4 pazar"}
+                  </Button>
+                  <Button size="sm" variant="primary" onClick={() => void runRound()} disabled={checking}>
+                    Kalibrasyon turu (açık pazarlar, sırayla)
+                  </Button>
+                </div>
               </div>
               <ul className="mt-2 divide-y divide-border text-[13px]">
                 {reg.all().map((a) => {
