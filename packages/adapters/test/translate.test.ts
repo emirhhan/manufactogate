@@ -1,4 +1,4 @@
-import { localizeQuery, translateQueryToZh } from "../src";
+import { localizeQuery, titleToQuery, translateQueryToZh, translateTitleToTr } from "../src";
 
 describe("query translation", () => {
   it("maps category names to Chinese", () => {
@@ -14,5 +14,15 @@ describe("query translation", () => {
   it("falls back to the original when nothing matches", () => {
     expect(translateQueryToZh("zxqv")).toBe("zxqv");
     expect(localizeQuery("kask", "tr")).toBe("kask");
+  });
+});
+
+describe("title to query", () => {
+  it("shortens Chinese titles for Chinese markets", () => {
+    expect(titleToQuery("意大利KASK UTOPIA Y乌托邦破风气动公路车骑行头盔自行车安全帽", "zh")).toBe("KASK UTOPIA 骑行头盔");
+  });
+  it("turns Chinese titles into Turkish queries", () => {
+    expect(translateTitleToTr("Arai RX7 摩托车头盔女男机车全盔")).toBe("Arai RX7 Motosiklet Kaskı");
+    expect(titleToQuery("TWS无线蓝牙耳机", "tr")).toBe("TWS kulaklık");
   });
 });

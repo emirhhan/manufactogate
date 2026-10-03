@@ -67,19 +67,35 @@ export async function runExtract(req: ExtractRequest): Promise<ExtractResult | E
         throw new Error(`çıkarma betiği enjekte edilemedi: ${e instanceof Error ? e.message : String(e)}`);
       });
 
+      let waitedForCaptcha = false;
+      let continueAfterCaptcha = false;
       const settle = async (): Promise<ExtractResult | ExtractFailure> => {
         let last = "";
         let stable = 0;
-        const deadline = t0 + timeoutMs;
+        const deadline = t0 + timeoutMs + 125000; // room for a solved captcha
         while (Date.now() < deadline) {
           const data = await exec<Record<string, unknown>>(tabId!, ((m: MarketId, k: string) => (window as unknown as { __mgx: { run: (m: MarketId, k: string) => unknown } }).__mgx.run(m, k)) as never, [market, req.kind]);
           const session = data?.["session"] as SessionState | undefined;
           const current = await chrome.tabs.get(tabId!).catch(() => null);
           const finalUrl = current?.url ?? req.url;
           if (session === "logged-out" || session === "captcha") {
-            // Hand the tab to the user so they can log in or solve the challenge, then retry.
-            keepTab = true;
+            // Hand the tab to the user; for a captcha, wait up to 2 minutes for them to solve it and continue.
             await chrome.tabs.update(tabId!, { active: true }).catch(() => undefined);
+            if (session === "captcha" && !waitedForCaptcha) {
+              waitedForCaptcha = true;
+              const until = Date.now() + 120000;
+              while (Date.now() < until) {
+                await sleep(1500);
+                const probe = await exec<Record<string, unknown>>(tabId!, ((m: MarketId, k: string) => (window as unknown as { __mgx?: { run: (m: MarketId, k: string) => unknown } }).__mgx?.run(m, k) ?? null) as never, [market, req.kind]).catch(() => null);
+                if (probe === null) await chrome.scripting.executeScript({ target: { tabId: tabId! }, files: ["extract.js"] }).catch(() => undefined);
+                else if (probe["session"] !== "captcha") {
+                  continueAfterCaptcha = true;
+                  break;
+                }
+              }
+              if (continueAfterCaptcha) continue;
+            }
+            keepTab = true;
             return { ok: true, data: { ...data, items: [] }, finalUrl, tookMs: Date.now() - t0 };
           }
           if (req.kind === "health") return { ok: true, data, finalUrl, tookMs: Date.now() - t0 };

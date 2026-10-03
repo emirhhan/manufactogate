@@ -82,9 +82,7 @@ export function createRealAdapter(def: RealMarketDef, runner: PageRunner): Marke
     const r = await runner.run<SearchPayload>(req);
     if (!r.ok) fail(def, r);
     assertSession(def, r.data.session, r.finalUrl);
-    if (r.data.strategy === "none" && r.data.items.length === 0) {
-      throw new AdapterError("SelectorBroken", def.id, `no results parsed on ${r.finalUrl}`);
-    }
+    // No items can mean "nothing matched"; a broken selector is caught by the health check instead.
     const fetchedAt = now();
     let n = 0;
     for (const item of r.data.items) {

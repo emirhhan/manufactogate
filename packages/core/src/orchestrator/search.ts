@@ -11,7 +11,7 @@ import {
 } from "../model";
 
 export type SearchInput =
-  | { kind: "image"; image: ImageInput; title?: string }
+  | { kind: "image"; image: ImageInput; title?: string; titles?: Partial<Record<MarketId, string>> }
   | { kind: "text"; query: string; perMarket?: Partial<Record<MarketId, string>> }
   | { kind: "link"; url: string };
 
@@ -81,7 +81,8 @@ export async function* runSearch(
       const so: SearchOptions = {};
       if (opts.maxPerMarket !== undefined) so.maxResults = opts.maxPerMarket;
       if (opts.signal) so.signal = opts.signal;
-      const textQuery = input.kind === "text" ? (input.perMarket?.[adapter.id] ?? input.query) : input.kind === "image" ? input.title : undefined;
+      const textQuery =
+        input.kind === "text" ? (input.perMarket?.[adapter.id] ?? input.query) : input.kind === "image" ? (input.titles?.[adapter.id] ?? input.title) : undefined;
       const canImage = input.kind === "image" && adapter.meta.capabilities.imageSearch;
       if (input.kind === "image" && !canImage && !textQuery) {
         emit({ type: "market", market: adapter.id, status: { state: "done", received: 0, durationMs: Date.now() - t0 } });

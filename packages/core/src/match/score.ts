@@ -72,7 +72,8 @@ export function scoreMatch(query: Fingerprint, candidate: Fingerprint): MatchSco
 
   let score = weightSum > 0 ? weighted / weightSum : 0;
   if (signals.modelNumberHit) score = Math.max(score, 0.7) + (1 - Math.max(score, 0.7)) * 0.5;
-  if (candidate.viaImageSearch && score < CONFIDENCE_THRESHOLDS.likely) {
+  const visualContradicts = signals.visualPhash !== undefined && signals.visualPhash < 0.25 && (signals.visualClip === undefined || signals.visualClip < 0.25);
+  if (candidate.viaImageSearch && score < CONFIDENCE_THRESHOLDS.likely && !visualContradicts) {
     // The market's visual engine already matched this item; treat as "likely" unless our own signals say more.
     score = CONFIDENCE_THRESHOLDS.likely;
     reasons.push("pazarın görsel araması eşleştirdi");

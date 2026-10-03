@@ -10,7 +10,7 @@ import {
 } from "@manufactogate/core";
 import { db, type SearchRecord } from "@/lib/db";
 import { browserFingerprinter } from "@/lib/fingerprinter";
-import { localizeQuery } from "@manufactogate/adapters";
+import { localizeQuery, titleToQuery } from "@manufactogate/adapters";
 import type { Fingerprinter } from "@manufactogate/core";
 import { getRegistry } from "@/lib/registry";
 
@@ -63,6 +63,11 @@ export const useSearch = create<SearchState>((set, get) => ({
         if (q !== input.query) perMarket[a.id] = q;
       }
       if (Object.keys(perMarket).length) input = { ...input, perMarket };
+    }
+    if (input.kind === "image" && input.title) {
+      const titles: Partial<Record<MarketId, string>> = {};
+      for (const a of adapters) titles[a.id] = titleToQuery(input.title, a.meta.language);
+      input = { ...input, titles };
     }
     const imageMarkets = new Set(input.kind === "image" ? adapters.filter((a) => a.meta.capabilities.imageSearch).map((a) => a.id) : []);
     const fp: Fingerprinter = {

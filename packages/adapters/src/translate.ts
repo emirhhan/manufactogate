@@ -52,6 +52,33 @@ export function translateQueryToZh(query: string): string {
   return [zh, ...codes].join(" ");
 }
 
+/** Chinese listing title → short Turkish query: brand/model tokens plus the category name found in the title. */
+export function translateTitleToTr(title: string): string {
+  const t = title.trim();
+  if (!/[\u3400-\u9fff]/.test(t)) return t;
+  const latin = (t.match(/[A-Za-z][A-Za-z0-9-]{1,}/g) ?? []).filter((w) => w.length >= 2).slice(0, 3);
+  const leaves = getLeaves().filter((l) => t.includes(l.zh)).sort((a, b) => b.zh.length - a.zh.length);
+  const cat = leaves[0]?.tr ?? Object.entries(EXTRA).find(([, zh]) => t.includes(zh))?.[0] ?? "";
+  const out = [...latin, cat].filter(Boolean).join(" ");
+  return out || t;
+}
+
+/** Shorten a long listing title into a searchable query for the given market language. */
+export function titleToQuery(title: string, language: string): string {
+  if (language === "zh") {
+    const t = title.trim();
+    if (/[\u3400-\u9fff]/.test(t)) {
+      // Keep brand/model tokens and the first Chinese phrase; long titles return nothing on PDD.
+      const latin = (t.match(/[A-Za-z][A-Za-z0-9-]{1,}/g) ?? []).slice(0, 2);
+      const leaves = getLeaves().filter((l) => t.includes(l.zh)).sort((a, b) => b.zh.length - a.zh.length);
+      const cat = leaves[0]?.zh ?? t.replace(/[^\u3400-\u9fff]/g, "").slice(0, 6);
+      return [...latin, cat].filter(Boolean).join(" ");
+    }
+    return translateQueryToZh(t);
+  }
+  return translateTitleToTr(title);
+}
+
 /** Per-market query: Chinese markets get the glossary translation, others the original. */
 export function localizeQuery(query: string, language: string): string {
   return language === "zh" ? translateQueryToZh(query) : query;
