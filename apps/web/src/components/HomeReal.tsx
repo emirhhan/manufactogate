@@ -22,11 +22,22 @@ export function HomeReal() {
   const targetCountry = useSettings((s) => s.targetCountry);
 
   useEffect(() => {
-    void (async () => {
-      setFeed(await buildFeed(targetCountry));
-      setRecent(await db.searches.orderBy("startedAt").reverse().limit(8).toArray());
-      await w.load();
-    })();
+    let alive = true;
+    // Let the page paint and become interactive first; the feed is computed afterwards.
+    const t = setTimeout(() => {
+      void (async () => {
+        try {
+          const f = await buildFeed(targetCountry);
+          if (alive) setFeed(f);
+        } catch (e) {
+          console.error("feed", e);
+          if (alive) setFeed({ featured: [], marginPicks: [], bestSellers: [], fresh: [], categories: [], stats: { listings: 0, markets: 0, searches: 0 } });
+        }
+        if (alive) setRecent(await db.searches.orderBy("startedAt").reverse().limit(8).toArray());
+        await w.load();
+      })();
+    }, 50);
+    return () => { alive = false; clearTimeout(t); };
   }, [targetCountry]);
 
   const describe = (r: SearchRecord) => (r.input.kind === "image" ? (r.input.title ?? "Görsel araması") : r.input.kind === "link" ? r.input.url : r.input.query);
@@ -36,7 +47,7 @@ export function HomeReal() {
     nav(`/search/${id}`);
   };
 
-  if (!feed) return null;
+  if (!feed) return <div className="mb-6 h-24 animate-pulse rounded-xl bg-surface-2" />;
   if (feed.stats.listings === 0) {
     const starters = ["kablosuz kulaklık", "motosiklet kaskı", "airfryer", "akıllı saat", "yoga matı", "köpek tasması"];
     return (

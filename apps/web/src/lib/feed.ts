@@ -51,17 +51,21 @@ export async function buildFeed(targetCountry = "tr", limit = 12): Promise<FeedS
     return 0.35 * fresh + 0.3 * sold + 0.15 * rating + boost;
   };
 
-  // Margin picks: a source listing with a target-country listing that looks like the same product.
-  const sources = items.filter((l) => reg.get(l.market)?.meta.role !== "target");
+  // Margin picks: inverted token index over target listings, so cost is ~linear, not sources×targets.
+  const sources = items.filter((l) => reg.get(l.market)?.meta.role !== "target").slice(-1500);
   const targets = items.filter((l) => reg.get(l.market)?.meta.country === targetCountry);
+  const tTokens = targets.map((t) => tokensOf(t.title));
+  const index = new Map<string, number[]>();
+  tTokens.forEach((set, i) => { for (const tok of set) (index.get(tok) ?? index.set(tok, []).get(tok)!).push(i); });
   const marginPicks: FeedSections["marginPicks"] = [];
   for (const s of sources) {
-    const st = tokensOf(s.title);
+    const hits = new Map<number, number>();
+    for (const tok of tokensOf(s.title)) for (const i of index.get(tok) ?? []) hits.set(i, (hits.get(i) ?? 0) + 1);
     let best: { listing: RawListing; targetPrice: number; ratio: number } | null = null;
-    for (const t of targets) {
-      const rel = relevance(s.title, t);
-      const overlap = [...tokensOf(t.title)].filter((x) => st.has(x)).length;
-      if (rel < 0.45 && overlap < 2) continue;
+    for (const [i, overlap] of hits) {
+      if (overlap < 2) continue;
+      const t = targets[i]!;
+      if (relevance(s.title, t) < 0.35) continue;
       const sp = convert(minPrice(s), s.price.currency, t.price.currency);
       if (!sp || sp <= 0) continue;
       const ratio = minPrice(t) / sp;
@@ -88,9 +92,11 @@ export async function buildFeed(targetCountry = "tr", limit = 12): Promise<FeedS
   // Categories seen in the user's data.
   const counts = new Map<string, number>();
   const leaves = getLeaves();
-  for (const l of items) {
+  const leafTr = leaves.map((x) => x.tr.toLowerCase());
+  for (const l of items.slice(-2000)) {
     const t = l.title;
-    const leaf = leaves.find((x) => t.includes(x.zh) || t.toLowerCase().includes(x.tr.toLowerCase()));
+    const tl = t.toLowerCase();
+    const leaf = leaves.find((x, i) => t.includes(x.zh) || tl.includes(leafTr[i]!));
     if (leaf) counts.set(leaf.key, (counts.get(leaf.key) ?? 0) + 1);
   }
   const categories = [...counts.entries()]
