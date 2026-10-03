@@ -103,9 +103,12 @@ function runLight(market: MarketId, kind: Kind): Light {
   return { sig: `${count}:${extra}:${activitySignature(document)}`, count, ready: document.readyState, href: location.href };
 }
 
-function dataUrlToFile(dataUrl: string, name = "query.jpg"): File {
+function dataUrlToFile(dataUrl: string): File {
   const [head, b64] = dataUrl.split(",");
   const mime = /data:([^;]+)/.exec(head ?? "")?.[1] ?? "image/jpeg";
+  // Sites read the type from the extension: a PNG named .jpg uploads as a broken image.
+  const ext = ({ "image/png": "png", "image/webp": "webp", "image/gif": "gif" } as Record<string, string>)[mime] ?? "jpg";
+  const name = `query.${ext}`;
   const bin = atob(b64 ?? "");
   const bytes = new Uint8Array(bin.length);
   for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);

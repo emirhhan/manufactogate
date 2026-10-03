@@ -101,7 +101,7 @@ export async function prepareImage(file: File): Promise<PreparedImage> {
     }
     const q = fitWithin(w, h, QUERY_MAX_EDGE);
     const t = fitWithin(w, h, THUMB_MAX_EDGE);
-    const dataUrl = needsResize(dataUrlBytes(original), w, h) ? await drawToDataUrl(source, q.width, q.height, QUERY_JPEG_QUALITY) : original;
+    const dataUrl = needsResize(dataUrlBytes(original), w, h) || !original.startsWith("data:image/jpeg") ? await drawToDataUrl(source, q.width, q.height, QUERY_JPEG_QUALITY) : original;
     const thumb = await drawToDataUrl(source, t.width, t.height, THUMB_JPEG_QUALITY);
     if ("close" in source) source.close();
     return { dataUrl, thumb, width: q.width, height: q.height, bytes: dataUrlBytes(dataUrl), name: file.name };
