@@ -133,6 +133,19 @@ describe("photo search: the named product", () => {
     expect(start).toHaveBeenCalledWith({ kind: "image", image: input.image, title: "Hermès Kelly 28 çanta" }, ["cn-1688", "cn-taobao", "tr-trendyol"], current.thumb);
   });
 
+  it("a guess is a suggestion: 'Bu adla ara' runs the search with it", async () => {
+    const base = seedResults(3);
+    const input = { kind: "image" as const, image: { dataUrl: "data:image/jpeg;base64,AAAA" } };
+    const start = vi.fn(async () => "s3");
+    useSearch.setState({ current: { ...base, input }, input, effective: input, identity: { title: "yeşil telefon kılıfı", source: "local", guess: true }, start });
+    mount(<Results />, "/search/s1");
+    expect(text()).toContain("Görsel aramalar ürünü adlandıramadı");
+    expect(text()).toContain("emin değil");
+    click([...host.querySelectorAll("button")].find((b) => b.textContent === "Bu adla ara") ?? null);
+    await flush();
+    expect(start).toHaveBeenCalledWith({ kind: "image", image: input.image, title: "yeşil telefon kılıfı" }, ["cn-1688", "cn-taobao", "tr-trendyol"], undefined);
+  });
+
   it("text searches never show it", () => {
     seedResults(3, { identity: { title: "kupa", source: "local" } });
     mount(<Results />, "/search/s1");

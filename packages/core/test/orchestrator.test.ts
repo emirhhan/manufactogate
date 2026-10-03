@@ -181,16 +181,26 @@ describe("runSearch", () => {
     expect(tr.calls[0]).toMatch(/hermes kelly/);
   });
 
-  it("(c6) a named product feeds text markets at once, in their language first, and is announced", async () => {
+  it("(c6) Claude's name feeds text markets at once, in their language first, and is announced", async () => {
     const tr = fakeAdapter({ id: "tr-a", language: "tr", results: { "Hermes çanta": [mk("tr-a", "1", "Hermes çanta")] } });
     const zh = fakeAdapter({ id: "cn-z", language: "zh", results: { "爱马仕 包": [mk("cn-z", "2", "爱马仕 包")] } });
-    const identify = async () => ({ title: "Hermes çanta", queries: { zh: "爱马仕 包" }, source: "local" as const, confidence: 0.8 });
+    const identify = async () => ({ title: "Hermes çanta", queries: { zh: "爱马仕 包" }, source: "claude" as const });
     const events = await collect(runSearch({ kind: "image", image: { dataUrl: "data:," } }, [tr, zh], fp, { ...quick, ladder: (t) => [t], identify }));
     expect(tr.calls).toEqual(["text:Hermes çanta"]);
     expect(zh.calls[0]).toBe("text:爱马仕 包");
-    expect(events.find((e) => e.type === "identity")).toMatchObject({ identity: { title: "Hermes çanta", source: "local" } });
+    expect(events.find((e) => e.type === "identity")).toMatchObject({ identity: { title: "Hermes çanta", source: "claude" } });
     expect(notes(events, "tr-a")[0]).toMatchObject({ code: "image-title" });
     expect(notes(events, "tr-a")[0]!.note).toContain("olarak arandı");
+  });
+
+  it("(c6b) a photo-only guess is offered as a suggestion and never searched (no 'green phone case' flood)", async () => {
+    const tr = fakeAdapter({ id: "tr-a", language: "tr", results: { "yeşil telefon kılıfı": [mk("tr-a", "1", "kılıf")] } });
+    const img = fakeAdapter({ id: "cn-b", imageSearch: true, imageResults: [] });
+    const identify = async () => ({ title: "yeşil telefon kılıfı", source: "local" as const, confidence: 0.4 });
+    const events = await collect(runSearch({ kind: "image", image: { dataUrl: "data:," } }, [tr, img], fp, { ...quick, ladder: (t) => [t], identify }));
+    expect(tr.calls).toEqual([]);
+    expect(events.find((e) => e.type === "identity")).toMatchObject({ identity: { title: "yeşil telefon kılıfı", guess: true } });
+    expect(notes(events, "tr-a").at(-1)!.note).toContain("ürünün adını yazarsan");
   });
 
   it("(c7) an image market whose image search finds nothing searches by Claude's name, never by a photo-only guess", async () => {

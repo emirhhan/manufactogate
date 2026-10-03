@@ -52,6 +52,12 @@ export interface ProductIdentity {
   categoryKey?: string;
   /** Brand and model were read from the image-search results' titles. */
   fromResults?: boolean;
+  /**
+   * A photo-only guess (product type, colour) with nothing from the image results to back it.
+   * It is shown as a suggestion and never searched by itself: a wrong guess ("phone case" for a
+   * mini phone) would fill the page with look-alikes.
+   */
+  guess?: boolean;
 }
 
 export type SearchEvent =
@@ -551,10 +557,8 @@ export async function* runSearch(
           }
           return { title: medoid, from: "results" };
         }
-        if (id) {
-          announce(id);
-          return { title: id.title, ...(id.queries ? { queries: id.queries } : {}), from: "identity" };
-        }
+        // Nothing from the image results: the photo-only guess is offered to the user, not searched.
+        if (id) announce({ ...id, guess: true });
         return undefined;
       })());
     const borrowedLadder = (b: Borrowed, adapter: MarketAdapter): string[] => {
@@ -723,7 +727,12 @@ export async function* runSearch(
               }
             }
             if (!ladder.length) {
-              emit({ type: "note", market: adapter.id, code: "no-image-search", note: "bu pazarda görselle arama yok ve başlık bilinmiyor" });
+              emit({
+                type: "note",
+                market: adapter.id,
+                code: "no-image-search",
+                note: identity ? "görsel aramalar ürünü adlandıramadı; ürünün adını yazarsan bu pazarda da aranır" : "bu pazarda görselle arama yok ve başlık bilinmiyor",
+              });
               finishDone();
               return;
             }

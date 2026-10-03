@@ -48,6 +48,22 @@ export function IdentityChip({ identity, busy, onSearch }: { identity: ProductId
       </form>
     );
   }
+  if (identity.guess) {
+    // Only the photo was looked at and the image results did not confirm it: a suggestion, not a search.
+    return (
+      <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[12px]" data-testid="identity">
+        <span className="text-muted">Görsel aramalar ürünü adlandıramadı. Tahmin:</span>
+        <span className="rounded-full border border-border bg-surface-2 px-2 py-0.5 font-medium">{identity.title}</span>
+        <span className="text-warning">emin değil</span>
+        <Button size="sm" variant="primary" type="button" disabled={busy} onClick={() => onSearch(identity.title)}>
+          Bu adla ara
+        </Button>
+        <Button size="sm" type="button" onClick={() => setEditing(true)}>
+          Doğru adı yaz
+        </Button>
+      </div>
+    );
+  }
   return (
     <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[12px]" data-testid="identity">
       <span className="text-muted">Fotoğraftaki ürün:</span>
