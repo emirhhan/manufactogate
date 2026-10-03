@@ -351,7 +351,7 @@ async function handleWall(ctx: Ctx, session: SessionState): Promise<ExtractResul
     ctx.progress("captcha");
     ctx.active.stage = "captcha";
     await scrollToTop(ctx.tabId);
-    await registry.focus(ctx.tabId);
+    const backTo = await registry.focus(ctx.tabId);
     notify(`captcha:${market}`, TR.captchaNotification(name), ctx.settings, ctx.tabId);
     const until = Date.now() + waitMs;
     ctx.hardCap = Math.max(ctx.hardCap, until + ctx.timeoutMs + 10000);
@@ -363,7 +363,9 @@ async function handleWall(ctx: Ctx, session: SessionState): Promise<ExtractResul
         continue;
       }
       if (d["session"] !== "captcha") {
-        // Solved: the settle budget restarts from now, not from the fixed wait mark.
+        // Solved: send the user back to ManufactoGate; the market tab keeps working in the background.
+        await registry.back(backTo);
+        // The settle budget restarts from now, not from the fixed wait mark.
         ctx.hardCap = Date.now() + ctx.timeoutMs + 30000;
         ctx.progress("settling");
         ctx.active.stage = "settling";
@@ -371,6 +373,7 @@ async function handleWall(ctx: Ctx, session: SessionState): Promise<ExtractResul
       }
       const stillVisible = await exec<boolean>(ctx.tabId, fnCaptcha).catch(() => true);
       if (!stillVisible) {
+        await registry.back(backTo);
         ctx.captchaInvisible = true;
         ctx.hardCap = Date.now() + ctx.timeoutMs + 30000;
         return null;

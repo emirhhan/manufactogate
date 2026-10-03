@@ -174,6 +174,13 @@ describe("runSearch", () => {
     expect(statuses(events, "tr-a").at(-1)).toMatchObject({ state: "done", received: 1 });
   });
 
+  it("(c5) the borrowed title is the one most image results agree on", async () => {
+    const img = fakeAdapter({ id: "cn-b", imageSearch: true, imageResults: [mk("cn-b", "1", "SKT STY 2026"), mk("cn-b", "2", "hermes kelly leather bag"), mk("cn-b", "3", "hermes kelly bag 28")] });
+    const tr = fakeAdapter({ id: "tr-a", language: "tr", results: {} });
+    await collect(runSearch({ kind: "image", image: { dataUrl: "data:," } }, [tr, img], fp, { ...quick, ladder: (t) => [t] }));
+    expect(tr.calls[0]).toMatch(/hermes kelly/);
+  });
+
   it("(c3) a remembered image failure does not block a photo-only search", async () => {
     const memo = fakeAdapter({ id: "cn-b", imageSearch: true, imageResults: [mk("cn-b", "9", "img")] });
     const events = await collect(runSearch({ kind: "image", image: { dataUrl: "data:," } }, [memo], fp, { ...quick, capabilityOverrides: { "cn-b": { imageSearch: false } } }));

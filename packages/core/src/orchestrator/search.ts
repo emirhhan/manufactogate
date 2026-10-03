@@ -108,6 +108,38 @@ class AbortedError extends Error {
   }
 }
 
+/** Words of a title; CJK runs become character pairs so Chinese titles compare too. */
+function titleTokens(t: string): Set<string> {
+  const out = new Set<string>();
+  for (const w of t.toLowerCase().split(/[^\p{L}\p{N}]+/u)) {
+    if (!w) continue;
+    if (/\p{Script=Han}/u.test(w)) for (let i = 0; i + 1 < w.length; i++) out.add(w.slice(i, i + 2));
+    else if (w.length > 1) out.add(w);
+  }
+  return out;
+}
+
+/** The title that overlaps most with the rest (a medoid); ties keep the earlier, better-ranked one. */
+export function representativeTitle(titles: string[]): string {
+  const toks = titles.map(titleTokens);
+  let best = 0;
+  let bestScore = -1;
+  toks.forEach((a, i) => {
+    let score = 0;
+    toks.forEach((b, j) => {
+      if (i === j || !a.size || !b.size) return;
+      let common = 0;
+      for (const x of a) if (b.has(x)) common++;
+      score += common / Math.min(a.size, b.size);
+    });
+    if (score > bestScore) {
+      bestScore = score;
+      best = i;
+    }
+  });
+  return titles[best]!;
+}
+
 const TURKISH_LETTERS = /[çğıöşüÇĞİÖŞÜ]/;
 
 /** Converts any thrown value into a typed AdapterError for a market. */
@@ -285,6 +317,7 @@ export async function* runSearch(
   let derivedTitle: Promise<string | undefined> | undefined;
   let resolveDerived: ((t: string | undefined) => void) | undefined;
   let imageDone: (() => void) | undefined;
+  let collectImageTitle: ((t: string) => void) | undefined;
   let candidateCount = 0;
   const poolQueue: (() => Promise<void>)[] = [];
   let poolActive = 0;
@@ -531,7 +564,7 @@ export async function* runSearch(
             emit({ type: "listing", market: adapter.id, listing: l });
             status(false);
             addCandidate(l, ph === "image");
-            if (ph === "image" && l.title.trim()) resolveDerived?.(l.title);
+            if (ph === "image" && l.title.trim()) collectImageTitle?.(l.title);
           }
           return received >= maxPerMarket;
         };
@@ -613,9 +646,18 @@ export async function* runSearch(
       effective.kind === "image" && !!opts.ladder && imageMarkets.length > 0 && !imageMarkets.includes(a) && ladderFor(effective, a).length === 0;
     if (toRun.some(waitsForTitle)) {
       derivedTitle = new Promise<string | undefined>((r) => (resolveDerived = r));
+      // One listing's title can be an odd seller code ("SKT STY 2026"): wait for a handful and take
+      // the one that shares the most words with the others.
+      const titles: string[] = [];
+      const settleTitle = () => resolveDerived?.(titles.length ? representativeTitle(titles) : undefined);
+      collectImageTitle = (t) => {
+        if (titles.length < 12) titles.push(t);
+        if (titles.length === 12) settleTitle();
+      };
       let left = imageMarkets.length;
       imageDone = () => {
-        if (--left === 0) resolveDerived?.(undefined);
+        left--;
+        if (titles.length >= 3 || left <= 0) settleTitle();
       };
       signal?.addEventListener("abort", () => resolveDerived?.(undefined), { once: true });
     }

@@ -288,7 +288,7 @@ describe("timing budget", () => {
     const worst = (kind: ExtractRequest["kind"], captcha: number) => TIMING.queueBudgetMs + TIMING.settleMs[kind] + TIMING.runSlackMs + captcha;
     expect(requestBudgetMs({ kind: "search" })).toBeGreaterThan(worst("search", TIMING.captchaWaitMs + TIMING.settleMs.search + 10_000));
     expect(requestBudgetMs({ kind: "health", quick: true })).toBeGreaterThan(worst("health", 0));
-    expect(requestBudgetMs({ kind: "search", timeoutMs: 40_000 })).toBeGreaterThan(requestBudgetMs({ kind: "search" }));
+    expect(requestBudgetMs({ kind: "search", timeoutMs: 60_000 })).toBeGreaterThan(requestBudgetMs({ kind: "search" }));
     // Core: active budget below the bridge wait, hard cap above the whole extension worst case.
     expect(TIMING.perMarketActiveMs).toBeLessThan(requestBudgetMs({ kind: "search" }));
     expect(TIMING.perMarketHardCapMs).toBeGreaterThan(requestBudgetMs({ kind: "search" }));

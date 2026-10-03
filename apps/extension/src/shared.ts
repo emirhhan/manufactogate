@@ -89,7 +89,7 @@ export interface Settings {
 export const DEFAULT_SETTINGS: Settings = {
   maxParallelTabs: 3,
   separateWindow: true,
-  captchaWaitMs: 120000,
+  captchaWaitMs: 300000,
   appOrigin: "http://localhost:5173",
   tempo: 1,
   rateLimit: {},

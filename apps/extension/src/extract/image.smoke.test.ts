@@ -37,4 +37,27 @@ describe("image upload smoke (simulated pages)", () => {
     expect(r).toBe("ok");
     expect(location.href).toContain("imgfile=1");
   }, 20_000);
+
+  it("1688: image lands in the search bar, then the bar's 搜索 button is pressed", async () => {
+    history.replaceState({}, "", "/youyuan/index.htm?tab=imageSearch");
+    document.body.innerHTML = `
+      <form class="search-form"><input name="keywords" placeholder="Ctrl+V 粘贴图片"><input type="file" accept="image/*" style="display:none">
+        <button type="submit" class="search-btn">搜索</button></form>`;
+    const log: string[] = [];
+    const form = document.querySelector("form")!;
+    form.addEventListener("submit", (e) => e.preventDefault());
+    const input = document.querySelector<HTMLInputElement>("input[type=file]")!;
+    input.addEventListener("change", () => {
+      log.push("upload");
+      const thumb = document.createElement("img");
+      form.prepend(thumb);
+    });
+    document.querySelector(".search-btn")!.addEventListener("click", () => {
+      log.push("search");
+      history.pushState({}, "", "/youyuan/index.htm?tab=imageSearch&imageId=1");
+    });
+    const r = await mgx().setImage("cn-1688", PNG);
+    expect(log).toEqual(["upload", "search"]);
+    expect(r).toBe("ok");
+  }, 20_000);
 });

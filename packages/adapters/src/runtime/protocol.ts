@@ -98,18 +98,18 @@ export interface Envelope<T> {
  */
 export const TIMING = {
   /** Settle budget per request kind inside the market tab. */
-  settleMs: { search: 25_000, detail: 20_000, supplier: 20_000, health: 8_000 } as Record<ExtractKind, number>,
+  settleMs: { search: 40_000, detail: 20_000, supplier: 20_000, health: 8_000 } as Record<ExtractKind, number>,
   /** Load retries, scrolling and tab bookkeeping on top of the settle budget. */
   runSlackMs: 45_000,
   /** Longest a request may wait for a free tab slot before the extension gives up on it. */
   queueBudgetMs: 240_000,
-  /** Default captcha wait (the user may raise it to 5 min in the popup). */
-  captchaWaitMs: 120_000,
+  /** Default captcha wait: 5 min, so a captcha solved by hand never loses the search. */
+  captchaWaitMs: 300_000,
   /** Quick probe (health, session): first reading, no captcha wait, no scrolling. */
   quickProbeMs: 8_000,
   /** Core: active-time budget per market and the absolute cap including queue time. */
-  perMarketActiveMs: 120_000,
-  perMarketHardCapMs: 600_000,
+  perMarketActiveMs: 420_000,
+  perMarketHardCapMs: 900_000,
   /** Health round on the web: markets probed at the same time, pause between probes of one worker. */
   healthConcurrency: 3,
   healthPauseMs: 600,

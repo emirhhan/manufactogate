@@ -188,7 +188,14 @@ async function setImage(market: MarketId, dataUrl: string): Promise<ImageOutcome
       } catch {
         /* calibrated hook broke: use the generic finder */
       }
-      return findImageConfirm(document);
+      const generic = findImageConfirm(document);
+      if (generic) return generic;
+      // 1688 puts the uploaded image into the search bar itself; its own search button starts the image search.
+      if (market === "cn-1688") {
+        const box = findSearchBox(document);
+        return box ? findSubmitFor(box) : null;
+      }
+      return null;
     };
     let btn = confirm();
     while (!btn && Date.now() < until) {

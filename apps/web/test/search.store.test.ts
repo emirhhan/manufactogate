@@ -113,8 +113,8 @@ describe("pure helpers", () => {
     expect(o.maxPerMarket).toBe(150);
     expect(o.priority).toBe(marketPriority);
     expect(o.capabilityOverrides).toEqual({ "cn-1688": { imageSearch: false } });
-    expect(o.perMarketTimeoutMs).toBe(120_000);
-    expect(o.perMarketHardCapMs).toBe(600_000);
+    expect(o.perMarketTimeoutMs).toBe(420_000);
+    expect(o.perMarketHardCapMs).toBe(900_000);
     expect(o.ladder!("kablosuz kulaklık", a)).toEqual(queryLadder("kablosuz kulaklık", "zh"));
     expect(typeof o.categorize).toBe("function");
     // Image search disabled for every adapter: no image loader (the link would be searched by title).

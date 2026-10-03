@@ -232,11 +232,22 @@ export class TabRegistry {
     return n;
   }
 
-  /** Brings a tab (and its window) to the front. */
-  async focus(tabId: number): Promise<void> {
+  /** Brings a tab (and its window) to the front; returns the tab the user was on, to go back to. */
+  async focus(tabId: number): Promise<number | null> {
+    const [prev] = await chrome.tabs.query({ active: true, lastFocusedWindow: true }).catch(() => []);
     const tab = await chrome.tabs.get(tabId).catch(() => null);
-    if (!tab) return;
+    if (!tab) return null;
     if (tab.windowId !== undefined) await chrome.windows.update(tab.windowId, { focused: true, state: "normal" }).catch(() => undefined);
     await chrome.tabs.update(tabId, { active: true }).catch(() => undefined);
+    return prev?.id !== undefined && prev.id !== tabId ? prev.id : null;
+  }
+
+  /** Returns the user to the tab they were on before `focus`; a no-op when that tab is gone. */
+  async back(prevTabId: number | null): Promise<void> {
+    if (prevTabId === null) return;
+    const tab = await chrome.tabs.get(prevTabId).catch(() => null);
+    if (!tab) return;
+    if (tab.windowId !== undefined) await chrome.windows.update(tab.windowId, { focused: true }).catch(() => undefined);
+    await chrome.tabs.update(prevTabId, { active: true }).catch(() => undefined);
   }
 }
