@@ -13,10 +13,12 @@ const fp = {
 describe("mock registry", () => {
   it("registers four markets and resolves links", () => {
     const r = createMockRegistry();
-    expect(r.all().map((a) => a.id).sort()).toEqual(["cn-1688", "cn-pinduoduo", "cn-taobao", "tr-trendyol"]);
+    const wave1 = r.all().filter((a) => !a.meta.version.includes("beta")).map((a) => a.id).sort();
+    expect(wave1).toEqual(["cn-1688", "cn-pinduoduo", "cn-taobao", "tr-trendyol"]);
+    expect(r.all().length).toBe(9);
     expect(r.resolve("https://cn-1688.example/item/kablosuz-kulaklik-1")?.listingId).toBe("kablosuz-kulaklik-1");
     expect(r.resolve("https://nowhere.example/x")).toBeNull();
-    expect(r.sources()).toHaveLength(3);
+    expect(r.sources().filter((a) => !a.meta.version.includes("beta"))).toHaveLength(3);
   });
 
   it("normalizes badges", () => {
@@ -27,7 +29,8 @@ describe("mock registry", () => {
   it("end-to-end search clusters the earbuds across markets", async () => {
     const r = createMockRegistry({ "cn-1688": { latencyMs: 1 }, "cn-taobao": { latencyMs: 1 }, "cn-pinduoduo": { latencyMs: 1 } });
     const events: SearchEvent[] = [];
-    for await (const e of runSearch({ kind: "text", query: "kablosuz kulaklık" }, r.sources(), fp, { maxPerMarket: 3 })) events.push(e);
+    const wave1Sources = r.sources().filter((a) => !a.meta.version.includes("beta"));
+    for await (const e of runSearch({ kind: "text", query: "kablosuz kulaklık" }, wave1Sources, fp, { maxPerMarket: 3 })) events.push(e);
     const last = [...events].reverse().find((e) => e.type === "clusters");
     expect(last?.type).toBe("clusters");
     if (last?.type !== "clusters") return;
@@ -41,7 +44,7 @@ describe("mock registry", () => {
   it("reports typed errors per market without failing the run", async () => {
     const r = createMockRegistry({ "cn-taobao": { session: "logged-out" }, "cn-1688": { latencyMs: 1 }, "cn-pinduoduo": { latencyMs: 1 } });
     const errors: SearchEvent[] = [];
-    for await (const e of runSearch({ kind: "text", query: "kablosuz kulaklık" }, r.sources(), fp, { maxPerMarket: 2 }))
+    for await (const e of runSearch({ kind: "text", query: "kablosuz kulaklık" }, r.sources().filter((a) => !a.meta.version.includes("beta")), fp, { maxPerMarket: 2 }))
       if (e.type === "market" && e.status.state === "error") errors.push(e);
     expect(errors).toHaveLength(1);
     expect(errors[0]!.type === "market" && errors[0]!.status.state === "error" && errors[0]!.status.type).toBe("LoggedOut");
