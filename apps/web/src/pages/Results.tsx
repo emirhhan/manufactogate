@@ -164,7 +164,7 @@ export function Results() {
         {visible.length > 0 && (
           <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5">
             {visible.map((l) => (
-              <ResultCard key={`${l.market}:${l.id}`} listing={l} confidence={confidence.get(`${l.market}:${l.id}`)} />
+              <ResultCard key={`${l.market}:${l.id}`} listing={l} confidence={confidence.get(`${l.market}:${l.id}`)} highlight={s.current?.sourceKey === `${l.market}:${l.id}`} />
             ))}
           </div>
         )}

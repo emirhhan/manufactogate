@@ -7,7 +7,8 @@ import { ListingActions } from "@/components/ListingActions";
 import { MarketStrip } from "@/components/MarketStrip";
 import { ResultCard } from "@/components/ResultCard";
 import { Badge, Button, Card, cn } from "@/components/ui";
-import { placeholder } from "@/lib/catalog";
+import { MarketImage } from "@/components/MarketImage";
+import { relevance } from "@/lib/relevance";
 import { db } from "@/lib/db";
 import { money, pct } from "@/lib/format";
 import { toTry } from "@/lib/fx";
@@ -70,19 +71,24 @@ export function Listing() {
     const input = dataUrl
       ? ({ kind: "image", image: { dataUrl, ...(first ? { sourceUrl: first } : {}) }, title: listing.title } as const)
       : ({ kind: "text", query: listing.title } as const);
-    const sid = await s.start(input, markets, dataUrl ?? undefined);
+    const sid = await s.start(input, markets, dataUrl ?? undefined, key);
     setCompareId(sid);
   };
 
   const comparing = compareId !== null && s.current?.id === compareId;
+  const [showFiltered, setShowFiltered] = useState<Record<string, boolean>>({});
   const others = useMemo(() => {
-    if (!comparing) return [];
+    if (!comparing || !listing) return [];
     return Object.entries(s.listings).map(([m, ls]) => {
       const list = ls.filter((l) => !(l.market === market && l.id === id));
-      const best = [...list].sort((a, b) => minTry(a) - minTry(b))[0];
-      return { market: m as MarketId, count: list.length, best, top: list.slice(0, 4) };
+      const scored = list.map((l) => ({ l, r: relevance(listing.title, l) })).sort((a, b) => b.r - a.r || minTry(a.l) - minTry(b.l));
+      const strong = scored.filter((x) => x.r >= 0.5);
+      const weak = scored.filter((x) => x.r < 0.5);
+      const pool = strong.length ? strong : scored.slice(0, 5);
+      const best = [...pool].sort((a, b) => minTry(a.l) - minTry(b.l))[0]?.l;
+      return { market: m as MarketId, count: list.length, best, top: pool.slice(0, 8).map((x) => x.l), weak: weak.map((x) => x.l), strongCount: strong.length };
     });
-  }, [comparing, s.listings, market, id]);
+  }, [comparing, s.listings, market, id, listing]);
   const confidence = useMemo(() => {
     const map = new Map<string, number>();
     for (const c of s.clusters) for (const m of c.members) map.set(`${m.listing.market}:${m.listing.id}`, m.match.score);
@@ -131,25 +137,13 @@ export function Listing() {
       <div className="mt-3 grid gap-6 lg:grid-cols-[460px_1fr]">
         <div>
           <div className="aspect-square overflow-hidden rounded-lg border border-border bg-surface-2">
-            <img
-              src={listing.images[img] ?? listing.images[0] ?? placeholder("")}
-              alt=""
-              referrerPolicy="no-referrer"
-              className="h-full w-full object-contain"
-              onError={(e) => {
-                const el = e.currentTarget;
-                if (!el.dataset["fallback"]) {
-                  el.dataset["fallback"] = "1";
-                  el.src = placeholder(adapter?.meta.name ?? "");
-                }
-              }}
-            />
+            <MarketImage src={listing.images[img] ?? listing.images[0]} label={adapter?.meta.name ?? ""} className="h-full w-full object-contain" />
           </div>
           {listing.images.length > 1 && (
             <div className="mt-2 flex gap-1.5 overflow-x-auto">
               {listing.images.slice(0, 10).map((u, i) => (
                 <button key={u} onClick={() => setImg(i)} className={cn("h-14 w-14 shrink-0 overflow-hidden rounded border", i === img ? "border-accent" : "border-border")}>
-                  <img src={u} alt="" referrerPolicy="no-referrer" className="h-full w-full object-cover" />
+                  <MarketImage src={u} className="h-full w-full object-cover" />
                 </button>
               ))}
             </div>
@@ -275,14 +269,14 @@ export function Listing() {
                   <th className="px-4 py-2 font-medium">Pazar</th>
                   <th className="py-2 font-medium">En düşük fiyat</th>
                   <th className="py-2 font-medium">≈ TRY</th>
-                  <th className="py-2 font-medium">Sonuç</th>
+                  <th className="py-2 font-medium">Yakın / toplam</th>
                   <th className="py-2 font-medium">En ucuz ilan</th>
                   <th className="py-2 pr-4 font-medium text-right">Güven</th>
                 </tr>
               </thead>
               <tbody>
-                <tr className="border-t border-border bg-accent/5">
-                  <td className="px-4 py-2 font-medium">{adapter?.meta.name} · bu ilan</td>
+                <tr className="border-t-2 border-accent bg-accent/15 text-accent">
+                  <td className="px-4 py-2 font-semibold">{adapter?.meta.name} · bu ilan (kaynak)</td>
                   <td className="py-2 tnum">{money(min, listing.price.currency)}</td>
                   <td className="py-2 tnum">{tryPrice !== null ? money(tryPrice, "TRY") : money(min, "TRY")}</td>
                   <td className="py-2">—</td>
@@ -294,7 +288,7 @@ export function Listing() {
                     <td className="px-4 py-2 font-medium">{reg.get(o.market)?.meta.name ?? o.market}</td>
                     <td className="py-2 tnum">{o.best ? money(Math.min(...o.best.price.tiers.map((t) => t.unitPrice)), o.best.price.currency) : "—"}</td>
                     <td className="py-2 tnum">{o.best ? money(minTry(o.best), "TRY") : "—"}</td>
-                    <td className="py-2 tnum">{o.count}</td>
+                    <td className="py-2 tnum" title="en yakın / toplam">{o.strongCount} / {o.count}</td>
                     <td className="max-w-[420px] truncate py-2" title={o.best?.title}>
                       {o.best ? (
                         <Link to={`/l/${o.best.market}/${o.best.id}`} className="text-accent hover:underline">
@@ -311,15 +305,31 @@ export function Listing() {
             </table>
           </div>
           {others.some((o) => o.top.length) && (
-            <div className="mt-4 space-y-4">
+            <div className="mt-4 space-y-5">
               {others.filter((o) => o.top.length).map((o) => (
                 <div key={o.market}>
-                  <div className="mb-2 text-[12px] font-medium uppercase tracking-wide text-muted">{reg.get(o.market)?.meta.name}</div>
+                  <div className="mb-2 flex items-center gap-3">
+                    <div className="text-[12px] font-medium uppercase tracking-wide text-muted">
+                      {reg.get(o.market)?.meta.name} · en yakın {o.top.length}
+                    </div>
+                    {o.weak.length > 0 && (
+                      <button onClick={() => setShowFiltered((v) => ({ ...v, [o.market]: !v[o.market] }))} className="text-[12px] text-accent hover:underline">
+                        {showFiltered[o.market] ? "Filtrelenenleri gizle" : `Filtrelenenleri göster (${o.weak.length})`}
+                      </button>
+                    )}
+                  </div>
                   <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
                     {o.top.map((l) => (
                       <ResultCard key={`${l.market}:${l.id}`} listing={l} confidence={confidence.get(`${l.market}:${l.id}`)} />
                     ))}
                   </div>
+                  {showFiltered[o.market] && (
+                    <div className="mt-2 grid grid-cols-2 gap-3 opacity-80 sm:grid-cols-4 xl:grid-cols-6">
+                      {o.weak.map((l) => (
+                        <ResultCard key={`${l.market}:${l.id}`} listing={l} confidence={confidence.get(`${l.market}:${l.id}`)} />
+                      ))}
+                    </div>
+                  )}
                 </div>
               ))}
             </div>

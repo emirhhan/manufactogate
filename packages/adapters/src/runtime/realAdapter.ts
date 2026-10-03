@@ -49,7 +49,9 @@ export interface RealMarketDef {
   id: MarketId;
   meta: MarketMeta;
   badgeMap: Record<string, NormalizedBadge>;
-  searchUrl(query: string): string;
+  searchUrl(query: string, page?: number): string;
+  /** How many result pages a text search may walk (default 1). */
+  maxPages?: number;
   /** Page for image search. `upload: false` means the URL already carries the image (no file injection). */
   imageSearchUrl?: (input: ImageInput) => { url: string; upload: boolean };
   detailUrl(id: string): string;
@@ -77,20 +79,45 @@ function assertSession(def: RealMarketDef, s: SessionState, url?: string) {
 export function createRealAdapter(def: RealMarketDef, runner: PageRunner): MarketAdapter {
   const now = () => new Date().toISOString();
 
-  async function* search(url: string, imageDataUrl: string | undefined, o?: SearchOptions): AsyncIterable<RawListing> {
-    const req = { market: def.id, kind: "search" as const, url, want: o?.maxResults ?? 30, ...(imageDataUrl ? { imageDataUrl } : {}) };
+  async function* searchPage(url: string, imageDataUrl: string | undefined, want: number, seen: Set<string>, o?: SearchOptions): AsyncIterable<RawListing> {
+    const req = { market: def.id, kind: "search" as const, url, want, ...(imageDataUrl ? { imageDataUrl } : {}) };
     const r = await runner.run<SearchPayload>(req);
     if (!r.ok) fail(def, r);
     assertSession(def, r.data.session, r.finalUrl);
     // No items can mean "nothing matched"; a broken selector is caught by the health check instead.
     const fetchedAt = now();
-    let n = 0;
     for (const item of r.data.items) {
       if (o?.signal?.aborted) return;
+      if (seen.has(item.id)) continue;
+      seen.add(item.id);
       const l = def.toListing(item, fetchedAt);
-      if (!l) continue;
+      if (l) yield l;
+    }
+  }
+
+  async function* search(url: string, imageDataUrl: string | undefined, o?: SearchOptions): AsyncIterable<RawListing> {
+    const max = o?.maxResults ?? 30;
+    const seen = new Set<string>();
+    let n = 0;
+    for await (const l of searchPage(url, imageDataUrl, Math.min(max, 60), seen, o)) {
       yield l;
-      if (++n >= (o?.maxResults ?? 30)) return;
+      if (++n >= max) return;
+    }
+  }
+
+  async function* searchText(query: string, o?: SearchOptions): AsyncIterable<RawListing> {
+    const max = o?.maxResults ?? 30;
+    const pages = Math.max(1, def.maxPages ?? 1);
+    const seen = new Set<string>();
+    let n = 0;
+    for (let page = 1; page <= pages && n < max; page++) {
+      let got = 0;
+      for await (const l of searchPage(def.searchUrl(query, page), undefined, Math.min(max - n, 60), seen, o)) {
+        got++;
+        yield l;
+        if (++n >= max) return;
+      }
+      if (got === 0) return;
     }
   }
 
@@ -112,7 +139,7 @@ export function createRealAdapter(def: RealMarketDef, runner: PageRunner): Marke
       return search(target.url, target.upload ? input.dataUrl : undefined, o);
     },
     searchByText(query: string, o?: SearchOptions) {
-      return search(def.searchUrl(query), undefined, o);
+      return searchText(query, o);
     },
 
     async fetchListing(id: string): Promise<RawListingDetail> {

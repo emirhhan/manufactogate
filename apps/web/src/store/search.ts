@@ -26,7 +26,7 @@ export interface SearchState {
   durationMs?: number;
   abort?: AbortController;
 
-  start(input: SearchInput, marketIds: MarketId[], thumb?: string): Promise<string>;
+  start(input: SearchInput, marketIds: MarketId[], thumb?: string, sourceKey?: string): Promise<string>;
   retryMarket(market: MarketId): Promise<void>;
   cancel(): void;
   load(searchId: string): Promise<void>;
@@ -40,7 +40,7 @@ export const useSearch = create<SearchState>((set, get) => ({
   similar: [],
   running: false,
 
-  async start(input, marketIds, thumb) {
+  async start(input, marketIds, thumb, sourceKey) {
     get().abort?.abort();
     const abort = new AbortController();
     const id = crypto.randomUUID();
@@ -48,6 +48,7 @@ export const useSearch = create<SearchState>((set, get) => ({
       id,
       input,
       ...(thumb ? { thumb } : {}),
+      ...(sourceKey ? { sourceKey } : {}),
       markets: marketIds,
       startedAt: new Date().toISOString(),
       clusterCount: 0,
@@ -75,7 +76,7 @@ export const useSearch = create<SearchState>((set, get) => ({
       forListing: async (l) => ({ ...(await browserFingerprinter.forListing(l)), ...(imageMarkets.has(l.market) ? { viaImageSearch: true } : {}) }),
     };
     void (async () => {
-      for await (const ev of runSearch(input, adapters, fp, { signal: abort.signal, maxPerMarket: 40 })) {
+      for await (const ev of runSearch(input, adapters, fp, { signal: abort.signal, maxPerMarket: 150 })) {
         if (abort.signal.aborted) return;
         if (ev.type === "market") set((s) => ({ markets: { ...s.markets, [ev.market]: ev.status } }));
         else if (ev.type === "note") set((s) => ({ notes: { ...s.notes, [ev.market]: ev.note } }));
@@ -101,7 +102,7 @@ export const useSearch = create<SearchState>((set, get) => ({
     const adapter = getRegistry().get(market);
     if (!adapter) return;
     set((s) => ({ markets: { ...s.markets, [market]: { state: "pending" } }, listings: { ...s.listings, [market]: [] } }));
-    for await (const ev of runSearch(input, [adapter], browserFingerprinter, { maxPerMarket: 40 })) {
+    for await (const ev of runSearch(input, [adapter], browserFingerprinter, { maxPerMarket: 150 })) {
       if (ev.type === "market") set((s) => ({ markets: { ...s.markets, [ev.market]: ev.status } }));
       else if (ev.type === "listing")
         set((s) => ({ listings: { ...s.listings, [ev.market]: [...(s.listings[ev.market] ?? []), ev.listing] } }));

@@ -1,5 +1,6 @@
 import { useEffect } from "react";
 import { Link } from "react-router-dom";
+import { MarketImage } from "@/components/MarketImage";
 import { Button, Card, Empty } from "@/components/ui";
 import { money, relTime } from "@/lib/format";
 import { getRegistry } from "@/lib/registry";
@@ -31,7 +32,7 @@ export function Watchlist() {
               const delta = x.lastPrice - x.firstPrice;
               return (
                 <div key={x.listingKey} className="flex items-center gap-3 px-3 py-2 text-[13px]">
-                  <div className="h-10 w-10 shrink-0 overflow-hidden rounded border border-border bg-surface-2">{x.image && <img src={x.image} alt="" referrerPolicy="no-referrer" className="h-full w-full object-cover" />}</div>
+                  <div className="h-10 w-10 shrink-0 overflow-hidden rounded border border-border bg-surface-2">{x.image && <MarketImage src={x.image} className="h-full w-full object-cover" />}</div>
                   <div className="min-w-0 flex-1">
                     <Link to={`/l/${x.market}/${x.listingId}`} className="block truncate hover:underline" title={x.title}>{x.title}</Link>
                     <div className="text-[12px] text-muted">{reg.get(x.market as never)?.meta.name ?? x.market} · son kontrol {relTime(x.lastCheckedAt)} · {x.history.length} kayıt</div>

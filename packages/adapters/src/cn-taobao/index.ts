@@ -167,7 +167,8 @@ export const defTaobao: RealMarketDef = {
   meta: { ...META_TAOBAO, version: "0.1.0" },
   badgeMap: BADGES_TAOBAO,
   healthQuery: "蓝牙耳机",
-  searchUrl: (q) => `https://s.taobao.com/search?q=${encodeURIComponent(q)}&tab=all`,
+  searchUrl: (q, page = 1) => `https://s.taobao.com/search?q=${encodeURIComponent(q)}&tab=all${page > 1 ? `&page=${page}` : ""}`,
+  maxPages: 3,
   imageSearchUrl: () => ({ url: "https://s.taobao.com/search?tab=all", upload: true }),
   detailUrl: (id) => `https://item.taobao.com/item.htm?id=${id}`,
   resolveLink(url): LinkInfo | null {

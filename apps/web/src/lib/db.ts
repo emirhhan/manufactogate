@@ -6,6 +6,8 @@ export interface SearchRecord {
   input: SearchInput;
   /** Thumbnail for history list (data URL), image searches only. */
   thumb?: string;
+  /** The listing a comparison was started from (`market:id`). */
+  sourceKey?: string;
   markets: string[];
   startedAt: string;
   finishedAt?: string;

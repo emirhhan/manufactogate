@@ -120,7 +120,8 @@ export const defPinduoduo: RealMarketDef = {
   meta: { ...META_PINDUODUO, version: "0.1.0", hosts: ["*.pinduoduo.com", "*.yangkeduo.com"] },
   badgeMap: BADGES_PINDUODUO,
   healthQuery: "蓝牙耳机",
-  searchUrl: (q) => `https://mobile.yangkeduo.com/search_result.html?search_key=${encodeURIComponent(q)}`,
+  searchUrl: (q, page = 1) => `https://mobile.yangkeduo.com/search_result.html?search_key=${encodeURIComponent(q)}${page > 1 ? `&page=${page}` : ""}`,
+  maxPages: 2,
   detailUrl: (id) => `https://mobile.yangkeduo.com/goods.html?goods_id=${id}`,
   resolveLink(url): LinkInfo | null {
     const m = LINK_PDD.exec(url);

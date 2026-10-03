@@ -74,8 +74,32 @@ export async function runExtract(req: ExtractRequest): Promise<ExtractResult | E
         let stable = 0;
         const deadline = t0 + timeoutMs + 125000; // room for a solved captcha
         while (Date.now() < deadline) {
-          const data = await exec<Record<string, unknown>>(tabId!, ((m: MarketId, k: string) => (window as unknown as { __mgx: { run: (m: MarketId, k: string) => unknown } }).__mgx.run(m, k)) as never, [market, req.kind]);
-          const session = data?.["session"] as SessionState | undefined;
+          let data = await exec<Record<string, unknown> | null>(
+            tabId!,
+            ((m: MarketId, k: string) => {
+              const w = window as unknown as { __mgx?: { run: (m: MarketId, k: string) => unknown } };
+              if (!w.__mgx) return null;
+              // Nudge lazy lists: most result pages render more cards as you scroll.
+              try {
+                window.scrollTo(0, document.body.scrollHeight);
+              } catch {
+                /* ignore */
+              }
+              return w.__mgx.run(m, k);
+            }) as never,
+            [market, req.kind],
+          ).catch(() => null);
+          if (data === null) {
+            // The page navigated (image upload, redirect) and the isolated world was reset: re-inject.
+            await chrome.scripting.executeScript({ target: { tabId: tabId! }, files: ["extract.js"] }).catch(() => undefined);
+            await sleep(500);
+            data = await exec<Record<string, unknown> | null>(tabId!, ((m: MarketId, k: string) => (window as unknown as { __mgx?: { run: (m: MarketId, k: string) => unknown } }).__mgx?.run(m, k) ?? null) as never, [market, req.kind]).catch(() => null);
+            if (data === null) {
+              await sleep(700);
+              continue;
+            }
+          }
+          const session = data["session"] as SessionState | undefined;
           const current = await chrome.tabs.get(tabId!).catch(() => null);
           const finalUrl = current?.url ?? req.url;
           if (session === "logged-out" || session === "captcha") {
@@ -109,7 +133,8 @@ export async function runExtract(req: ExtractRequest): Promise<ExtractResult | E
           if (stable >= 2) return { ok: true, data, finalUrl, tookMs: Date.now() - t0 };
           await sleep(700);
         }
-        const data = await exec<Record<string, unknown>>(tabId!, ((m: MarketId, k: string) => (window as unknown as { __mgx: { run: (m: MarketId, k: string) => unknown } }).__mgx.run(m, k)) as never, [market, req.kind]);
+        await chrome.scripting.executeScript({ target: { tabId: tabId! }, files: ["extract.js"] }).catch(() => undefined);
+        const data = (await exec<Record<string, unknown> | null>(tabId!, ((m: MarketId, k: string) => (window as unknown as { __mgx?: { run: (m: MarketId, k: string) => unknown } }).__mgx?.run(m, k) ?? null) as never, [market, req.kind]).catch(() => null)) ?? { session: "unknown", items: [], strategy: "none" };
         const current = await chrome.tabs.get(tabId!).catch(() => null);
         return { ok: true, data, finalUrl: current?.url ?? req.url, tookMs: Date.now() - t0 };
       };

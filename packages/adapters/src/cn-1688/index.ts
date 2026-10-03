@@ -201,7 +201,8 @@ export const def1688: RealMarketDef = {
   meta: { ...META_1688, version: "0.1.0" },
   badgeMap: BADGES_1688,
   healthQuery: "蓝牙耳机",
-  searchUrl: (q) => `https://s.1688.com/selloffer/offer_search.htm?keywords=${encodeURIComponent(q)}`,
+  searchUrl: (q, page = 1) => `https://s.1688.com/selloffer/offer_search.htm?keywords=${encodeURIComponent(q)}${page > 1 ? `&beginPage=${page}` : ""}`,
+  maxPages: 3,
   imageSearchUrl: (input) => {
     const src = input.sourceUrl ?? "";
     if (/^https?:\/\/cbu0\d\.alicdn\.com\//.test(src)) {

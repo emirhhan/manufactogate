@@ -1,6 +1,6 @@
 import { normalizeBadges, type RawListing } from "@manufactogate/core";
 import { BADGE_LABELS_TR } from "@manufactogate/adapters";
-import { placeholder } from "@/lib/catalog";
+import { MarketImage } from "./MarketImage";
 import { money } from "@/lib/format";
 import { toTry } from "@/lib/fx";
 import { getRegistry } from "@/lib/registry";
@@ -14,7 +14,7 @@ const MARKET_TONE: Record<string, string> = {
   "tr-trendyol": "bg-orange-500",
 };
 
-export function ResultCard({ listing, confidence }: { listing: RawListing; confidence?: number | undefined }) {
+export function ResultCard({ listing, confidence, highlight = false }: { listing: RawListing; confidence?: number | undefined; highlight?: boolean }) {
   const reg = getRegistry();
   const adapter = reg.get(listing.market);
   const badges = adapter ? normalizeBadges(adapter, listing.badges) : [];
@@ -23,23 +23,10 @@ export function ResultCard({ listing, confidence }: { listing: RawListing; confi
   return (
     <Link
       to={`/l/${listing.market}/${listing.id}`}
-      className="group flex flex-col overflow-hidden rounded-lg border border-border bg-surface transition-shadow hover:shadow-md"
+      className={cn("group flex flex-col overflow-hidden rounded-lg border bg-surface transition-shadow hover:shadow-md", highlight ? "border-accent ring-2 ring-accent/40" : "border-border")}
     >
       <div className="relative aspect-square w-full overflow-hidden bg-surface-2">
-        <img
-          src={listing.images[0] ?? placeholder("")}
-          alt=""
-          loading="lazy"
-          referrerPolicy="no-referrer"
-          className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.03]"
-          onError={(e) => {
-            const el = e.currentTarget;
-            if (!el.dataset["fallback"]) {
-              el.dataset["fallback"] = "1";
-              el.src = placeholder(adapter?.meta.name ?? "");
-            }
-          }}
-        />
+        <MarketImage src={listing.images[0]} label={adapter?.meta.name ?? ""} loading="lazy" className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.03]" />
         <span className={cn("absolute left-2 top-2 rounded px-1.5 py-0.5 text-[11px] font-medium text-white", MARKET_TONE[listing.market] ?? "bg-accent")}>
           {adapter?.meta.name ?? listing.market}
         </span>

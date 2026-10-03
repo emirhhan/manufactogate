@@ -100,7 +100,8 @@ export const defTrendyol: RealMarketDef = {
   meta: { ...META_TRENDYOL, version: "0.1.0" },
   badgeMap: BADGES_TRENDYOL,
   healthQuery: "bluetooth kulaklık",
-  searchUrl: (q) => `https://www.trendyol.com/sr?q=${encodeURIComponent(q)}`,
+  searchUrl: (q, page = 1) => `https://www.trendyol.com/sr?q=${encodeURIComponent(q)}${page > 1 ? `&pi=${page}` : ""}`,
+  maxPages: 3,
   detailUrl: (id) => `https://www.trendyol.com/p/-p-${id}`,
   resolveLink(url): LinkInfo | null {
     const m = LINK_TRENDYOL.exec(url);
