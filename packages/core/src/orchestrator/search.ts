@@ -48,6 +48,10 @@ export interface ProductIdentity {
   source: "local" | "claude";
   /** 0..1, how sure the namer is about the product type. */
   confidence?: number;
+  /** Taxonomy leaf of the product type, when the namer found one. */
+  categoryKey?: string;
+  /** Brand and model were read from the image-search results' titles. */
+  fromResults?: boolean;
 }
 
 export type SearchEvent =
@@ -115,6 +119,11 @@ export interface SearchRunOptions {
   identify?: (input: Extract<SearchInput, { kind: "image" }>, queryFp: Fingerprint, signal?: AbortSignal) => Promise<ProductIdentity | null>;
   /** Longest wait for `identify` (default 25 s). */
   identifyTimeoutMs?: number;
+  /**
+   * Builds the name of a photo-only search from what the image-search results' titles agree on
+   * (brand, model) plus the photo's own guess; null when the titles name no brand or model.
+   */
+  refineIdentity?: (titles: string[], identity: ProductIdentity | null) => ProductIdentity | null;
 }
 
 class TimeoutError extends Error {
@@ -336,8 +345,8 @@ export async function* runSearch(
 
   // ---- Fingerprint pool -------------------------------------------------------------
   let clusterer: IncrementalClusterer | null = null;
-  let derivedTitle: Promise<string | undefined> | undefined;
-  let resolveDerived: ((t: string | undefined) => void) | undefined;
+  let derivedTitles: Promise<string[]> | undefined;
+  let resolveDerived: ((t: string[]) => void) | undefined;
   let imageDone: (() => void) | undefined;
   let collectImageTitle: ((t: string) => void) | undefined;
   let candidateCount = 0;
@@ -509,23 +518,50 @@ export async function* runSearch(
         signal?.addEventListener("abort", () => done(null), { once: true });
         identify(photo, queryFp, signal).then(done, () => done(null));
       });
+      // Claude names brand and model itself: announce it at once. A photo-only guess waits for
+      // the image results, which usually carry the brand and model (see borrowedTitle).
       void identity.then((id) => {
-        if (id && !aborted()) emit({ type: "identity", identity: id });
+        if (id?.source === "claude" && !aborted()) emit({ type: "identity", identity: id });
       });
     }
-    /** Title for markets that search by text on a photo-only search: the named product, else one borrowed from image results. */
-    let borrowed: Promise<{ title: string; queries?: Partial<Record<string, string>>; from: "identity" | "results" } | undefined> | undefined;
+    let announced = false;
+    const announce = (id: ProductIdentity) => {
+      if (announced || aborted() || id.source === "claude") return;
+      announced = true;
+      emit({ type: "identity", identity: id });
+    };
+    type Borrowed = { title: string; queries?: Partial<Record<string, string>>; medoid?: string; from: "identity" | "results" };
+    /**
+     * What markets that search by text look for on a photo-only search, most specific first:
+     * Claude's name; else brand + model the image results agree on (+ the photo's product type),
+     * followed by the old ladder of the most typical result title; else the photo-only guess.
+     */
+    let borrowed: Promise<Borrowed | undefined> | undefined;
     const borrowedTitle = () =>
-      (borrowed ??= (async () => {
+      (borrowed ??= (async (): Promise<Borrowed | undefined> => {
         const id = identity ? await identity : null;
-        if (id) return { title: id.title, ...(id.queries ? { queries: id.queries } : {}), from: "identity" as const };
-        const t = derivedTitle ? await derivedTitle : undefined;
-        return t ? { title: t, from: "results" as const } : undefined;
+        if (id?.source === "claude") return { title: id.title, ...(id.queries ? { queries: id.queries } : {}), from: "identity" };
+        const titles = derivedTitles ? await derivedTitles : [];
+        if (titles.length) {
+          const medoid = representativeTitle(titles);
+          const refined = opts.refineIdentity?.(titles, id) ?? null;
+          if (refined?.title.trim()) {
+            announce(refined);
+            return { title: refined.title, ...(refined.queries ? { queries: refined.queries } : {}), medoid, from: "identity" };
+          }
+          return { title: medoid, from: "results" };
+        }
+        if (id) {
+          announce(id);
+          return { title: id.title, ...(id.queries ? { queries: id.queries } : {}), from: "identity" };
+        }
+        return undefined;
       })());
-    const borrowedLadder = (b: { title: string; queries?: Partial<Record<string, string>> }, adapter: MarketAdapter): string[] => {
+    const borrowedLadder = (b: Borrowed, adapter: MarketAdapter): string[] => {
       const own = b.queries?.[adapter.meta.language]?.trim();
+      const typical = b.medoid && opts.ladder ? opts.ladder(b.medoid, adapter) : [];
       const rungs = opts.ladder ? opts.ladder(b.title, adapter) : [b.title];
-      return [...new Set([...(own ? [own] : []), ...rungs].map((r) => r.trim()).filter(Boolean))];
+      return [...new Set([...(own ? [own] : []), ...typical, ...rungs].map((r) => r.trim()).filter(Boolean))];
     };
     if (!queryFp.title && mainTitle) queryFp.title = mainTitle;
     const alts = new Set<string>();
@@ -589,11 +625,11 @@ export async function* runSearch(
         emit({ type: "market", market: adapter.id, status: { state: "done", received, durationMs: Date.now() - t0, ...(aborted() ? { cancelled: true } : {}) } });
       try {
         let ladder = ladderFor(effective, adapter);
-        /** An image market whose own search came back empty can still search by the named product. */
+        /** An image market whose own search came back empty can still search by Claude's name for the product. */
         const identityLadder = async () => {
           if (ladder.length || !identity) return;
           const id = await identity;
-          if (id && !aborted()) ladder = borrowedLadder(id, adapter);
+          if (id?.source === "claude" && !aborted()) ladder = borrowedLadder({ title: id.title, ...(id.queries ? { queries: id.queries } : {}), from: "identity" }, adapter);
         };
         const lang = adapter.meta.language;
         if (effective.kind === "text" && lang !== "tr" && ladder.length > 1) {
@@ -673,7 +709,7 @@ export async function* runSearch(
               await textLadder();
             }
           } else {
-            if (!ladder.length && (identity || derivedTitle)) {
+            if (!ladder.length && (identity || derivedTitles)) {
               const b = await borrowedTitle();
               if (b && !aborted()) {
                 ladder = borrowedLadder(b, adapter);
@@ -682,7 +718,7 @@ export async function* runSearch(
                     type: "note",
                     market: adapter.id,
                     code: "image-title",
-                    note: b.from === "identity" ? `fotoğraftaki ürün tanındı, "${ladder[0]}" ile arandı` : `görselle bulunan ürünün başlığıyla arandı: "${ladder[0]}"`,
+                    note: b.from === "identity" ? `fotoğraftaki ürün "${ladder[0]}" olarak arandı` : `görselle bulunan ürünün başlığıyla arandı: "${ladder[0]}"`,
                   });
               }
             }
@@ -714,12 +750,12 @@ export async function* runSearch(
     const imageMarkets = effective.kind === "image" ? toRun.filter((a) => a.meta.capabilities.imageSearch) : [];
     const waitsForTitle = (a: MarketAdapter) =>
       effective.kind === "image" && (imageMarkets.length > 0 || !!identity) && !imageMarkets.includes(a) && ladderFor(effective, a).length === 0;
-    if (toRun.some(waitsForTitle) && imageMarkets.length > 0) {
-      derivedTitle = new Promise<string | undefined>((r) => (resolveDerived = r));
+    if ((toRun.some(waitsForTitle) || identity) && imageMarkets.length > 0) {
+      derivedTitles = new Promise<string[]>((r) => (resolveDerived = r));
       // One listing's title can be an odd seller code ("SKT STY 2026"): wait for a handful and take
       // the one that shares the most words with the others.
       const titles: string[] = [];
-      const settleTitle = () => resolveDerived?.(titles.length ? representativeTitle(titles) : undefined);
+      const settleTitle = () => resolveDerived?.([...titles]);
       collectImageTitle = (t) => {
         if (titles.length < 12) titles.push(t);
         if (titles.length === 12) settleTitle();
@@ -729,7 +765,7 @@ export async function* runSearch(
         left--;
         if (titles.length >= 3 || left <= 0) settleTitle();
       };
-      signal?.addEventListener("abort", () => resolveDerived?.(undefined), { once: true });
+      signal?.addEventListener("abort", () => resolveDerived?.([]), { once: true });
     }
 
     // Concurrency + priority.
@@ -752,7 +788,7 @@ export async function* runSearch(
       else active--;
     };
     const tasks = ordered.map(async (adapter) => {
-      if ((identity || derivedTitle) && waitsForTitle(adapter)) await borrowedTitle();
+      if ((identity || derivedTitles) && waitsForTitle(adapter)) await borrowedTitle();
       await acquire();
       try {
         if (aborted()) {
@@ -766,6 +802,7 @@ export async function* runSearch(
       }
     });
     await Promise.all(tasks);
+    if (identity && !aborted()) await borrowedTitle();
     if (!aborted() && poolPending() > 0) await Promise.race([poolIdle(), sleep(fingerprintGraceMs)]);
     recluster();
   };

@@ -12,6 +12,7 @@ vi.mock("../src/lib/identify", () => ({
     return { title: "termos", queries: { zh: "保温杯" }, source: "local", confidence: 0.9 };
   }),
   warmLabelBank: () => undefined,
+  identifyFromResultsOrNull: () => null,
 }));
 
 const photo: ImageInput = { dataUrl: "data:image/jpeg;base64,AAAA" };

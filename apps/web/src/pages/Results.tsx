@@ -131,8 +131,8 @@ export function Results() {
   };
   /** What the markets were really asked: the resolved listing's title/image for a link search. */
   const effective = s.effective ?? (input?.kind === "link" ? undefined : input);
-  // A photo-only search is scored against the name it got from the photo.
-  const queryText = effective?.kind === "text" ? effective.query : effective?.kind === "image" ? effective.title || s.identity?.title || "" : "";
+  // A photo search ranks by how the listings look; only a title the user typed adds text relevance.
+  const queryText = effective?.kind === "text" ? effective.query : effective?.kind === "image" ? (effective.title ?? "") : "";
   const deferredListings = useDeferredValue(s.listings);
 
   const all = useMemo(() => {

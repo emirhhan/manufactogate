@@ -23,7 +23,7 @@ import { categoryKey, localizeQueryLadder, queryLadder, TIMING } from "@manufact
 import { cancelExtensionRuns } from "@/lib/bridge";
 import { db, getSetting, listingsForSearch, persistClusters, persistListings, setSetting, type ListingBatchItem, type SearchRecord } from "@/lib/db";
 import { browserFingerprinter } from "@/lib/fingerprinter";
-import { identifyProduct } from "@/lib/identify";
+import { identifyFromResultsOrNull, identifyProduct } from "@/lib/identify";
 import { imageToDataUrl } from "@/lib/images";
 import { getRegistry } from "@/lib/registry";
 import { useSettings, VERIFIED_MARKETS, WAVE1_MARKETS } from "@/store/settings";
@@ -231,6 +231,7 @@ export function searchRunOptions(adapters: Pick<MarketAdapter, "id" | "meta">[],
       const { search, claude } = useSettings.getState();
       return identifyProduct(input.image, queryFp, { local: search.visualAi, claude: claude.apiKey.trim() ? claude : undefined }, signal);
     },
+    refineIdentity: identifyFromResultsOrNull,
   };
 }
 

@@ -764,6 +764,93 @@ export function brandModel(title: string): { brand: string; models: string[]; at
   return { brand, models, attrs: attrs.map((a) => a.replace(/\s+/g, "")) };
 }
 
+/** Latin codes common in listing titles that are never a brand or a model: certifications, materials, sizes, tech words. */
+const GENERIC_CODES = new Set(
+  (
+    "3c ccc abs pc eps pu pvc tpu tpe pp pe eva pet led lcd usb dot ece ce fcc rohs sgs iso xs xxs xl xxl xxxl 2xl 3xl 4xl 5xl " +
+    "new hot ins diy oem odm ok vip app wifi gps nfc hd fhd uhd 4k 8k 5g 4g 3d ai type typec co ltd cm mm kg ml mah"
+  ).split(/\s+/),
+);
+
+export interface TitleProduct {
+  brand: string;
+  models: string[];
+  /** The category most titles name (a taxonomy leaf or a glossary noun), when they agree. */
+  category: Leaf | GlossaryTerm | null;
+}
+
+/**
+ * Brand, model and category that several listing titles agree on: what an image search's results
+ * say the product is ("AGV PISTA GP RR 头盔…" in five titles → AGV, Pista, GP, RR, kask). Latin words
+ * inside Chinese titles all count; in Latin-script titles only capitals and codes do, since the rest
+ * are ordinary words. A word must appear in at least a quarter of the titles (and in two).
+ */
+export function productFromTitles(titles: string[], knownBrands: { name: string; zh?: string }[] = []): TitleProduct {
+  const docs = titles.map((t) => t.replace(/\([^)]*\)|\[[^\]]*\]|（[^）]*）|【[^】]*】/g, " ").trim()).filter(Boolean);
+  const minDf = Math.max(2, Math.ceil(docs.length * 0.25));
+  const known = new Map(knownBrands.map((b) => [foldAccents(b.name).toLowerCase(), b] as const));
+  const stats = new Map<string, { df: number; pos: number; forms: Map<string, number> }>();
+  for (const t of docs) {
+    const cjk = isCjk(t);
+    const toks = t.match(/\p{Script=Latin}[\p{Script=Latin}\d-]*|\d+\p{Script=Latin}[\p{Script=Latin}\d-]*/gu) ?? [];
+    const seen = new Set<string>();
+    toks.forEach((raw, i) => {
+      const w = foldAccents(raw.replace(/-+$/, ""));
+      const key = w.toLowerCase();
+      if (key.length < 2 || seen.has(key) || isUnit(w) || GENERIC_CODES.has(key) || TR_LETTERS.test(w)) return;
+      const f = foldTr(w);
+      if (TR_STOP.has(f) || MATERIAL_STOP.has(f) || ATTR.some((a) => foldTr(a.tr) === f || a.en.toLowerCase() === key)) return;
+      const caps = /^[A-Z0-9-]{2,}$/.test(w) && /[A-Z]/.test(w);
+      const code = /\d/.test(w) && /[A-Za-z]/.test(w);
+      if (!cjk && !caps && !code && !known.has(key)) return;
+      seen.add(key);
+      const s = stats.get(key) ?? { df: 0, pos: 0, forms: new Map<string, number>() };
+      s.df++;
+      s.pos += toks.length > 1 ? i / (toks.length - 1) : 0;
+      s.forms.set(w, (s.forms.get(w) ?? 0) + 1);
+      stats.set(key, s);
+    });
+  }
+  const shared = [...stats.entries()].filter(([, s]) => s.df >= minDf).sort((a, b) => a[1].pos / a[1].df - b[1].pos / b[1].df);
+  // Most common spelling; long all-caps words read better title-cased ("PISTA" → "Pista").
+  const spell = (key: string) => {
+    const form = [...stats.get(key)!.forms.entries()].sort((a, b) => b[1] - a[1])[0]![0];
+    return /^[A-Z]{4,}$/.test(form) && !known.has(key) ? form[0] + form.slice(1).toLowerCase() : form;
+  };
+  let brandKey = shared.find(([k]) => known.has(k))?.[0] ?? "";
+  let brand = brandKey ? known.get(brandKey)!.name : "";
+  if (!brand) {
+    // A brand written only in Chinese (爱马仕) counts when enough titles carry it.
+    const zhHit = knownBrands.find((b) => b.zh && docs.filter((t) => t.includes(b.zh!)).length >= minDf);
+    if (zhHit) brand = zhHit.name;
+  }
+  if (!brand) {
+    const first = shared.find(([k]) => !/\d/.test(k) && !SERIES.has(k) && !categoryWordSet().has(k));
+    if (first) {
+      brandKey = first[0];
+      brand = spell(brandKey);
+    }
+  }
+  const models = shared
+    .filter(([k]) => k !== brandKey && !categoryWordSet().has(k))
+    .slice(0, 3)
+    .map(([k]) => spell(k));
+
+  const votes = new Map<string, { hit: Leaf | GlossaryTerm; n: number }>();
+  for (const t of docs) {
+    const h = categoryHit(t);
+    const hit = h?.leaf ?? h?.term;
+    if (!hit) continue;
+    const k = "key" in hit ? hit.key : `term:${hit.tr}`;
+    const v = votes.get(k) ?? { hit, n: 0 };
+    v.n++;
+    votes.set(k, v);
+  }
+  const top = [...votes.values()].sort((a, b) => b.n - a.n)[0];
+  const category = top && top.n >= Math.max(2, Math.ceil(docs.length * 0.3)) ? top.hit : null;
+  return { brand, models, category };
+}
+
 /** Chinese attribute words rendered in Turkish (gender is omitted when both 男 and 女 appear). */
 const ZH_ATTR_TR: [string, string][] = [
   ["不锈钢", "Paslanmaz çelik"], ["无线", "Kablosuz"], ["蓝牙", "Bluetooth"], ["儿童", "Çocuk"], ["婴儿", "Bebek"], ["黑色", "Siyah"], ["白色", "Beyaz"], ["红色", "Kırmızı"], ["蓝色", "Mavi"],

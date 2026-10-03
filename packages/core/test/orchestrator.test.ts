@@ -190,15 +190,40 @@ describe("runSearch", () => {
     expect(zh.calls[0]).toBe("text:爱马仕 包");
     expect(events.find((e) => e.type === "identity")).toMatchObject({ identity: { title: "Hermes çanta", source: "local" } });
     expect(notes(events, "tr-a")[0]).toMatchObject({ code: "image-title" });
-    expect(notes(events, "tr-a")[0]!.note).toContain("tanındı");
+    expect(notes(events, "tr-a")[0]!.note).toContain("olarak arandı");
   });
 
-  it("(c7) an image market whose image search finds nothing searches by the named product", async () => {
+  it("(c7) an image market whose image search finds nothing searches by Claude's name, never by a photo-only guess", async () => {
     const img = fakeAdapter({ id: "cn-b", imageSearch: true, imageResults: [], results: { termos: [mk("cn-b", "1", "termos")] } });
-    const identify = async () => ({ title: "termos", source: "local" as const });
-    const events = await collect(runSearch({ kind: "image", image: { dataUrl: "data:," } }, [img], fp, { ...quick, ladder: (t) => [t], identify }));
+    const claude = async () => ({ title: "termos", source: "claude" as const });
+    const events = await collect(runSearch({ kind: "image", image: { dataUrl: "data:," } }, [img], fp, { ...quick, ladder: (t) => [t], identify: claude }));
     expect(img.calls).toEqual(["image", "text:termos"]);
     expect(statuses(events, "cn-b").at(-1)).toMatchObject({ state: "done", received: 1 });
+    const guess = fakeAdapter({ id: "cn-b", imageSearch: true, imageResults: [], results: { termos: [mk("cn-b", "1", "termos")] } });
+    await collect(runSearch({ kind: "image", image: { dataUrl: "data:," } }, [guess], fp, { ...quick, ladder: (t) => [t], identify: async () => ({ title: "termos", source: "local" as const }) }));
+    expect(guess.calls).toEqual(["image"]);
+  });
+
+  it("(c10) with image results, text markets search brand + model first, then the typical result title, and the name is shown", async () => {
+    const img = fakeAdapter({ id: "cn-b", imageSearch: true, imageResults: [mk("cn-b", "1", "AGV PISTA GP RR 头盔"), mk("cn-b", "2", "AGV Pista GP RR 碳纤维 头盔"), mk("cn-b", "3", "AGV PISTA GP RR 全盔")] });
+    const tr = fakeAdapter({ id: "tr-a", language: "tr", results: {} });
+    const local = async () => ({ title: "kask", queries: { tr: "Kask" }, source: "local" as const, categoryKey: "kask" });
+    const refineIdentity = (titles: string[], id: { title: string } | null) => (titles.some((t) => /AGV/.test(t)) ? { title: `AGV Pista GP RR ${id?.title ?? ""}`.trim(), queries: { tr: "AGV Pista GP RR Kask" }, source: "local" as const, fromResults: true } : null);
+    const events = await collect(runSearch({ kind: "image", image: { dataUrl: "data:," } }, [tr, img], fp, { ...quick, ladder: (t) => [t], identify: local, refineIdentity, ladderMinResults: 99 }));
+    expect(tr.calls[0]).toBe("text:AGV Pista GP RR Kask");
+    expect(tr.calls[1]).toMatch(/^text:AGV/);
+    expect(tr.calls).not.toContain("text:kask");
+    expect(events.filter((e) => e.type === "identity")).toEqual([{ type: "identity", identity: expect.objectContaining({ title: "AGV Pista GP RR kask", fromResults: true }) }]);
+  });
+
+  it("(c11) image results with no brand or model keep the old title-based search, not the photo-only guess", async () => {
+    const img = fakeAdapter({ id: "cn-b", imageSearch: true, imageResults: [mk("cn-b", "1", "摩托车头盔 全盔 男"), mk("cn-b", "2", "摩托车头盔 全盔 四季")] });
+    const tr = fakeAdapter({ id: "tr-a", language: "tr", results: {} });
+    const local = async () => ({ title: "kask", source: "local" as const });
+    const events = await collect(runSearch({ kind: "image", image: { dataUrl: "data:," } }, [tr, img], fp, { ...quick, ladder: (t) => [t], identify: local, refineIdentity: () => null }));
+    expect(tr.calls[0]).toMatch(/^text:摩托车头盔/);
+    expect(tr.calls).not.toContain("text:kask");
+    expect(events.some((e) => e.type === "identity")).toBe(false);
   });
 
   it("(c8) without a name (null, error or timeout) text markets fall back to the image results' titles", async () => {

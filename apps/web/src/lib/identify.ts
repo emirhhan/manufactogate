@@ -1,4 +1,4 @@
-import { getLeaves, glossaryName, photoTerms, type GlossaryTerm, type Leaf } from "@manufactogate/adapters";
+import { getLeaves, glossaryName, photoTerms, productFromTitles, type GlossaryTerm, type Leaf } from "@manufactogate/adapters";
 import { l2Normalize, type Fingerprint, type ImageInput, type ProductIdentity } from "@manufactogate/core";
 import { clipProvider } from "./clip";
 import { getSetting, setSetting } from "./db";
@@ -38,6 +38,10 @@ export const BRANDS: Brand[] = [
   { name: "Under Armour", zh: "安德玛" }, { name: "Skechers", zh: "斯凯奇" }, { name: "Fila", zh: "斐乐" }, { name: "Crocs", zh: "卡骆驰" },
   { name: "Birkenstock", zh: "勃肯" }, { name: "Timberland", zh: "添柏岚" }, { name: "UGG" }, { name: "Salomon", zh: "萨洛蒙" },
   { name: "Columbia", zh: "哥伦比亚" }, { name: "Lululemon", zh: "露露乐蒙" },
+  // Helmets and moto gear
+  { name: "AGV" }, { name: "Shoei" }, { name: "Arai" }, { name: "HJC" }, { name: "LS2" }, { name: "Shark" }, { name: "Bell" },
+  { name: "Nolan" }, { name: "X-Lite" }, { name: "Scorpion" }, { name: "KYT" }, { name: "Caberg" }, { name: "Schuberth" },
+  { name: "Alpinestars" }, { name: "Dainese" }, { name: "Fox Racing" }, { name: "Oakley" },
   // Electronics
   { name: "Apple", zh: "苹果" }, { name: "Samsung", zh: "三星" }, { name: "Xiaomi", zh: "小米" }, { name: "Huawei", zh: "华为" },
   { name: "Honor", zh: "荣耀" }, { name: "OnePlus", zh: "一加" }, { name: "OPPO" }, { name: "Sony", zh: "索尼" }, { name: "JBL" },
@@ -148,7 +152,30 @@ export function nameProduct(image: Float32Array, bank: LabelBank): ProductIdenti
   }
   const lower = (s: string) => s.toLocaleLowerCase("tr");
   const title = [brand?.name ?? "", colorTerm ? lower(colorTerm.tr) : "", materialTerm ? lower(materialTerm.tr) : "", lower(leaf.tr)].filter(Boolean).join(" ");
-  return { title, queries, source: "local", confidence: Math.round(cat.p * 100) / 100 };
+  return { title, queries, source: "local", confidence: Math.round(cat.p * 100) / 100, categoryKey: leaf.key };
+}
+
+const plainName = (name: string) => name.normalize("NFD").replace(/\p{M}/gu, "");
+
+/**
+ * The name a photo-only search gets from its image-search results: the brand and model several
+ * result titles agree on ("AGV PISTA GP RR …" → AGV Pista GP RR) with the product type the titles
+ * (or else the photo) name. Null when the titles share no brand or model: the search then keeps
+ * searching by the most typical result title, which is more specific than a type alone.
+ */
+export function identityFromResults(titles: string[], photo: ProductIdentity | null): ProductIdentity | null {
+  const found = productFromTitles(titles, BRANDS);
+  if (!found.brand && !found.models.length) return null;
+  const photoLeaf = photo?.categoryKey ? (getLeaves().find((l) => l.key === photo.categoryKey) ?? null) : null;
+  const category: Leaf | GlossaryTerm | null = found.category ?? photoLeaf;
+  const brandZh = BRANDS.find((b) => b.name === found.brand)?.zh;
+  const queries: Partial<Record<string, string>> = {};
+  for (const lang of QUERY_LANGUAGES) {
+    const brand = found.brand ? (lang === "zh" && brandZh ? brandZh : plainName(found.brand)) : "";
+    queries[lang] = [brand, ...found.models, category ? glossaryName(category, lang) : ""].filter(Boolean).join(" ");
+  }
+  const title = [found.brand, ...found.models, category ? category.tr.toLocaleLowerCase("tr") : ""].filter(Boolean).join(" ");
+  return { title, queries, source: "local", fromResults: true, ...(category && "key" in category ? { categoryKey: category.key } : {}) };
 }
 
 /* ------------------------------------------------------------------------------------------ */
@@ -245,4 +272,13 @@ export async function identifyProduct(image: ImageInput, queryFp: Fingerprint, c
   const vec = l2Normalize(raw);
   const bank = await labelBank();
   return bank ? nameProduct(vec, bank) : null;
+}
+
+/** `identityFromResults`, never throwing: a bad title must not stop the search. */
+export function identifyFromResultsOrNull(titles: string[], photo: ProductIdentity | null): ProductIdentity | null {
+  try {
+    return identityFromResults(titles, photo);
+  } catch {
+    return null;
+  }
 }

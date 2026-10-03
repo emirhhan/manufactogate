@@ -90,3 +90,20 @@ describe("naming a product from its photo (free model)", () => {
     expect(new Set(BRANDS.map((b) => b.name)).size).toBe(BRANDS.length);
   });
 });
+
+describe("naming a photo from its image-search results (brand + model + type)", () => {
+  it("AGV Pista image results → 'AGV Pista GP RR kask', spelled per market", async () => {
+    const { identityFromResults } = await import("./identify");
+    const id = identityFromResults(
+      ["AGV PISTA GP RR碳纤维全盔赛道头盔男摩托车", "意大利AGV PISTA GPRR 罗西限量版 头盔", "AGV Pista GP RR 头盔 碳纤维 全盔", "正品AGV PISTA GP RR mono carbon 摩托车头盔", "摩托车头盔男全盔 3C认证 ABS"],
+      { title: "kask", source: "local", categoryKey: "kask" },
+    )!;
+    expect(id).toMatchObject({ title: "AGV Pista GP RR kask", source: "local", fromResults: true });
+    expect(id.queries).toMatchObject({ tr: "AGV Pista GP RR Kask", zh: "AGV Pista GP RR 头盔", en: "AGV Pista GP RR helmet" });
+  });
+
+  it("results that share no brand or model give no name (the search keeps the typical result title)", async () => {
+    const { identityFromResults } = await import("./identify");
+    expect(identityFromResults(["摩托车头盔男全盔 3C认证 ABS", "电动车头盔 四季通用 3C认证", "机车头盔 复古 半盔"], { title: "kask", source: "local" })).toBeNull();
+  });
+});

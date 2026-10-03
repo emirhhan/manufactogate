@@ -12,8 +12,8 @@ export function IdentityChip({ identity, busy, onSearch }: { identity: ProductId
   const [editing, setEditing] = useState(false);
   const [text, setText] = useState(identity.title);
   useEffect(() => setText(identity.title), [identity.title]);
-  const source = identity.source === "claude" ? "Claude ile tanındı" : "ücretsiz modelle tanındı";
-  const sure = identity.confidence !== undefined ? ` · %${Math.round(identity.confidence * 100)} emin` : "";
+  const source = identity.source === "claude" ? "Claude ile tanındı" : identity.fromResults ? "görsel arama sonuçlarından bulundu" : "ücretsiz modelle tanındı";
+  const sure = identity.confidence !== undefined && !identity.fromResults ? ` · %${Math.round(identity.confidence * 100)} emin` : "";
   const queries = Object.entries(identity.queries ?? {})
     .filter(([, q]) => q)
     .map(([lang, q]) => `${LANG_LABEL[lang] ?? lang}: ${q}`)
