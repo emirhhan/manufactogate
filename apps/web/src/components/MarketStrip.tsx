@@ -13,7 +13,11 @@ const ERROR_TEXT: Record<string, { title: string; hint: string }> = {
 
 export function MarketStrip({ markets, notes = {}, onRetry }: { markets: Record<string, MarketStatus>; notes?: Record<string, string>; onRetry: (m: MarketId) => void }) {
   const reg = getRegistry();
+  const problems = Object.entries(markets)
+    .map(([id, st]) => ({ id, text: st.state === "error" ? `${ERROR_TEXT[st.type]?.title ?? st.type}: ${st.message}` : notes[id] }))
+    .filter((x): x is { id: string; text: string } => !!x.text);
   return (
+    <div>
     <div className="flex flex-wrap gap-2">
       {Object.entries(markets).map(([id, st]) => {
         const name = reg.get(id as MarketId)?.meta.name ?? id;
@@ -57,6 +61,19 @@ export function MarketStrip({ markets, notes = {}, onRetry }: { markets: Record<
           </div>
         );
       })}
+    </div>
+    {problems.length > 0 && (
+      <details className="mt-2 text-[12px] text-muted">
+        <summary className="cursor-pointer select-none">Tanı ({problems.length})</summary>
+        <ul className="mt-1 space-y-0.5 font-mono text-[11px]">
+          {problems.map((p) => (
+            <li key={p.id}>
+              <span className="text-text">{reg.get(p.id as MarketId)?.meta.name ?? p.id}</span>: {p.text}
+            </li>
+          ))}
+        </ul>
+      </details>
+    )}
     </div>
   );
 }

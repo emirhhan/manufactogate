@@ -202,7 +202,15 @@ export const def1688: RealMarketDef = {
   badgeMap: BADGES_1688,
   healthQuery: "蓝牙耳机",
   searchUrl: (q) => `https://s.1688.com/selloffer/offer_search.htm?keywords=${encodeURIComponent(q)}`,
-  imageSearchUrl: () => "https://s.1688.com/youyuan/index.htm?tab=imageSearch",
+  imageSearchUrl: (input) => {
+    const src = input.sourceUrl ?? "";
+    if (/^https?:\/\/[^/]*alicdn\.com\//.test(src)) {
+      // 1688 can search by one of its own CDN images without an upload.
+      const clean = src.replace(/_\d+x\d+q?\d*\.jpg_?\.webp$/, "").replace(/\.webp$/, "").replace(/_\.webp$/, "");
+      return { url: `https://s.1688.com/youyuan/index.htm?tab=imageSearch&imageAddress=${encodeURIComponent(clean)}`, upload: false };
+    }
+    return { url: "https://s.1688.com/youyuan/index.htm?tab=imageSearch", upload: true };
+  },
   detailUrl: (id) => `https://detail.1688.com/offer/${id}.html`,
   resolveLink(url): LinkInfo | null {
     const m = LINK_1688.exec(url);

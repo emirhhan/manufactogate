@@ -50,8 +50,8 @@ export interface RealMarketDef {
   meta: MarketMeta;
   badgeMap: Record<string, NormalizedBadge>;
   searchUrl(query: string): string;
-  /** Page that hosts the market's own image-search upload input. */
-  imageSearchUrl?: () => string;
+  /** Page for image search. `upload: false` means the URL already carries the image (no file injection). */
+  imageSearchUrl?: (input: ImageInput) => { url: string; upload: boolean };
   detailUrl(id: string): string;
   supplierUrl?: (id: string) => string;
   resolveLink(url: string): LinkInfo | null;
@@ -110,7 +110,8 @@ export function createRealAdapter(def: RealMarketDef, runner: PageRunner): Marke
 
     searchByImage(input: ImageInput, o?: SearchOptions) {
       if (!def.imageSearchUrl) throw new AdapterError("NotFound", def.id, "bu pazar görselle arama desteklemiyor");
-      return search(def.imageSearchUrl(), input.dataUrl, o);
+      const target = def.imageSearchUrl(input);
+      return search(target.url, target.upload ? input.dataUrl : undefined, o);
     },
     searchByText(query: string, o?: SearchOptions) {
       return search(def.searchUrl(query), undefined, o);

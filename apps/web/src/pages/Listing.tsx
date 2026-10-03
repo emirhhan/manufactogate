@@ -67,7 +67,9 @@ export function Listing() {
     const markets = enabled.includes(market) ? enabled : [...enabled, market];
     const first = listing.images[0];
     const dataUrl = first ? await imageToDataUrl(first) : null;
-    const input = dataUrl ? ({ kind: "image", image: { dataUrl }, title: listing.title } as const) : ({ kind: "text", query: listing.title } as const);
+    const input = dataUrl
+      ? ({ kind: "image", image: { dataUrl, ...(first ? { sourceUrl: first } : {}) }, title: listing.title } as const)
+      : ({ kind: "text", query: listing.title } as const);
     const sid = await s.start(input, markets, dataUrl ?? undefined);
     setCompareId(sid);
   };

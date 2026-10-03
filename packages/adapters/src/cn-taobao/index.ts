@@ -168,7 +168,7 @@ export const defTaobao: RealMarketDef = {
   badgeMap: BADGES_TAOBAO,
   healthQuery: "蓝牙耳机",
   searchUrl: (q) => `https://s.taobao.com/search?q=${encodeURIComponent(q)}&tab=all`,
-  imageSearchUrl: () => "https://s.taobao.com/search?tab=all",
+  imageSearchUrl: () => ({ url: "https://s.taobao.com/search?tab=all", upload: true }),
   detailUrl: (id) => `https://item.taobao.com/item.htm?id=${id}`,
   resolveLink(url): LinkInfo | null {
     const m = LINK_TAOBAO.exec(url);

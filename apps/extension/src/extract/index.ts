@@ -10,7 +10,7 @@ type Kind = "search" | "detail" | "supplier" | "health";
 
 interface Mgx {
   run(market: MarketId, kind: Kind): unknown;
-  setImage(market: MarketId, dataUrl: string): "ok" | "no-input";
+  setImage(market: MarketId, dataUrl: string): "ok" | "ok-paste" | "no-input";
   capture(): string;
 }
 
@@ -41,22 +41,52 @@ function dataUrlToFile(dataUrl: string, name = "query.jpg"): File {
   return new File([bytes], name, { type: mime });
 }
 
-function setImage(market: MarketId, dataUrl: string): "ok" | "no-input" {
+function findTrigger(): HTMLElement | null {
+  const bySelector = document.querySelector<HTMLElement>(
+    "[class*='camera'], [class*='Camera'], [class*='imgsearch'], [class*='imageSearch'], [class*='image-search'], [class*='ImageSearch'], [class*='picSearch'], [class*='photo'], [title*='图'], [aria-label*='图'], [data-spm*='img'], [class*='upload']",
+  );
+  if (bySelector) return bySelector;
+  for (const el of document.querySelectorAll<HTMLElement>("button, a, span, div, label")) {
+    const t = (el.textContent ?? "").trim();
+    if (t.length <= 12 && /上传图片|按图片搜索|图搜|拍照|以图搜|Görselle ara|görsel/i.test(t)) return el;
+  }
+  return null;
+}
+
+function setImage(market: MarketId, dataUrl: string): "ok" | "ok-paste" | "no-input" {
   const ex = PAGE_EXTRACTORS[market];
+  const file = dataUrlToFile(dataUrl);
+  const dt = new DataTransfer();
+  dt.items.add(file);
+
+  // 1) A file input on the page (possibly hidden), optionally after clicking the camera/upload trigger.
   let input = ex?.imageInput?.(document) ?? null;
   if (!input) {
-    // Some pages create the input only after the camera icon is clicked.
-    const trigger = document.querySelector<HTMLElement>("[class*='camera'], [class*='imgsearch'], [class*='image-search'], [class*='ImageSearch'], [title*='图'], [aria-label*='图']");
-    trigger?.click();
+    findTrigger()?.click();
     input = document.querySelector<HTMLInputElement>("input[type=file]");
   }
-  if (!input) return "no-input";
-  const dt = new DataTransfer();
-  dt.items.add(dataUrlToFile(dataUrl));
-  input.files = dt.files;
-  input.dispatchEvent(new Event("input", { bubbles: true }));
-  input.dispatchEvent(new Event("change", { bubbles: true }));
-  return "ok";
+  if (input) {
+    input.files = dt.files;
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+    input.dispatchEvent(new Event("change", { bubbles: true }));
+    return "ok";
+  }
+  // 2) Taobao and 1688 accept a pasted image in the search box ("Ctrl+V 粘贴图片快速图搜").
+  const box =
+    document.querySelector<HTMLElement>("input[type=search], input[name='q'], input[name='keywords'], input[placeholder*='搜'], input[placeholder*='Ara'], [contenteditable='true']") ??
+    document.activeElement as HTMLElement | null;
+  const targets = [box, document.body].filter((t): t is HTMLElement => !!t);
+  for (const t of targets) {
+    try {
+      t.focus?.();
+      const ev = new ClipboardEvent("paste", { bubbles: true, cancelable: true, clipboardData: dt });
+      t.dispatchEvent(ev);
+      return "ok-paste";
+    } catch {
+      /* try next target */
+    }
+  }
+  return "no-input";
 }
 
 /** Page HTML for calibration fixtures. Inline scripts are kept (they hold embedded state); cookies are never in HTML. */

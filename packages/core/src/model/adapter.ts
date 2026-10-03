@@ -29,6 +29,8 @@ export interface MarketMeta {
 export interface ImageInput {
   /** Data URL or object URL the adapter can load. */
   dataUrl: string;
+  /** Where the image came from, when it is already hosted (lets markets search by URL without an upload). */
+  sourceUrl?: string;
   /** Optional crop region as fractions of the full image. */
   region?: { x: number; y: number; w: number; h: number };
 }

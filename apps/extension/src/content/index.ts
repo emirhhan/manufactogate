@@ -3,7 +3,7 @@
  * requests between the page and the background worker over a runtime port.
  * No runtime imports: content scripts are classic scripts.
  */
-const EXT_VERSION = "0.3.0";
+const EXT_VERSION = "0.3.1";
 const WEB_SOURCE = "manufactogate-web";
 const EXT_SOURCE = "manufactogate-ext";
 const PORT_NAME = "mg";

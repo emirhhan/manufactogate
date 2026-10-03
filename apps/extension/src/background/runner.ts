@@ -101,15 +101,22 @@ export async function runExtract(req: ExtractRequest): Promise<ExtractResult | E
       if (req.imageDataUrl) {
         // The upload widget mounts late on these pages: retry the file input for a few seconds.
         let r = "no-input";
-        for (let i = 0; i < 8 && r !== "ok"; i++) {
+        for (let i = 0; i < 8 && !r.startsWith("ok"); i++) {
           await sleep(700);
           r = await exec<string>(tabId, ((m: MarketId, d: string) => (window as unknown as { __mgx: { setImage: (m: MarketId, d: string) => string } }).__mgx.setImage(m, d)) as never, [market, req.imageDataUrl]).catch(() => "no-input");
         }
-        if (r !== "ok") {
+        if (!r.startsWith("ok")) {
           const current = await chrome.tabs.get(tabId).catch(() => null);
-          return failure("SelectorBroken", "görsel yükleme girişi bulunamadı", current?.url ?? req.url);
+          return failure("SelectorBroken", "görsel yükleme girişi bulunamadı (dosya girişi yok, yapıştırma da tutmadı)", current?.url ?? req.url);
         }
-        await sleep(2000);
+        // Uploads take a moment; pasted images usually trigger a navigation to the result page.
+        await sleep(r === "ok-paste" ? 3500 : 2000);
+        const before = (await chrome.tabs.get(tabId).catch(() => null))?.url;
+        for (let i = 0; i < 10; i++) {
+          const now = (await chrome.tabs.get(tabId).catch(() => null))?.url;
+          if (now && now !== before) break;
+          await sleep(500);
+        }
         // After upload the page navigates or re-renders; re-inject the extract bundle.
         await waitForLoad(tabId, 12000).catch(() => undefined);
         await chrome.scripting.executeScript({ target: { tabId }, files: ["extract.js"] }).catch(() => undefined);
