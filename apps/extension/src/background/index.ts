@@ -47,9 +47,16 @@ async function handle(msg: WebToExt): Promise<ExtToWeb> {
     case "sessions":
       return { type: "sessions", sessions: await allSessions() };
     case "health": {
-      const markets = msg.market ? [msg.market] : (Object.keys(REAL_DEF_BY_ID) as MarketId[]);
+      // Only the four calibrated markets by default; beta markets are checked one at a time on request.
+      const markets = msg.market ? [msg.market] : (Object.keys(REAL_DEF_BY_ID) as MarketId[]).filter((m) => !REAL_DEF_BY_ID[m]?.meta.version.includes("beta"));
       const health: Partial<Record<MarketId, HealthResult>> = {};
-      for (const m of markets) health[m] = await healthFor(m);
+      for (const m of markets) {
+        try {
+          health[m] = await healthFor(m);
+        } catch (e) {
+          health[m] = { ok: false, checkedAt: new Date().toISOString(), message: e instanceof Error ? e.message : String(e) };
+        }
+      }
       const stored = ((await chrome.storage.local.get("health")).health as Partial<Record<MarketId, HealthResult>> | undefined) ?? {};
       await chrome.storage.local.set({ health: { ...stored, ...health } });
       return { type: "health", health: { ...stored, ...health } };

@@ -74,6 +74,23 @@ export function Settings() {
                       <span className={cn("inline-block h-2 w-2 rounded-full", h ? (h.ok ? "bg-success" : "bg-danger") : sess === "logged-in" ? "bg-success" : sess === "logged-out" ? "bg-warning" : "bg-border")} />
                       <span className="w-24 font-medium">{a.meta.name}</span>
                       <span className="text-muted">{h ? h.message : SESSION_TR[sess]}</span>
+                      {a.meta.version.includes("beta") && (
+                        <button
+                          className="text-[12px] text-accent hover:underline"
+                          disabled={checking}
+                          onClick={async () => {
+                            setChecking(true);
+                            try {
+                              const r = await sendToExtension<ExtToWeb & { type: "health" }>({ type: "health", market: a.id }, 90000);
+                              setHealth((prev) => ({ ...prev, ...r.health }));
+                            } finally {
+                              setChecking(false);
+                            }
+                          }}
+                        >
+                          kontrol et
+                        </button>
+                      )}
                       {sess === "logged-out" && a.meta.loginUrl && (
                         <a href={a.meta.loginUrl} target="_blank" rel="noreferrer noopener" className="ml-auto text-accent hover:underline">
                           Giriş yap ↗

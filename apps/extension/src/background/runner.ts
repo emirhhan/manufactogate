@@ -72,7 +72,7 @@ export async function runExtract(req: ExtractRequest): Promise<ExtractResult | E
       const settle = async (): Promise<ExtractResult | ExtractFailure> => {
         let last = "";
         let stable = 0;
-        const deadline = t0 + timeoutMs + 125000; // room for a solved captcha
+        let deadline = t0 + timeoutMs;
         while (Date.now() < deadline) {
           let data = await exec<Record<string, unknown> | null>(
             tabId!,
@@ -108,6 +108,7 @@ export async function runExtract(req: ExtractRequest): Promise<ExtractResult | E
             if (session === "captcha" && !waitedForCaptcha) {
               waitedForCaptcha = true;
               const until = Date.now() + 120000;
+              deadline = until + timeoutMs;
               while (Date.now() < until) {
                 await sleep(1500);
                 const probe = await exec<Record<string, unknown>>(tabId!, ((m: MarketId, k: string) => (window as unknown as { __mgx?: { run: (m: MarketId, k: string) => unknown } }).__mgx?.run(m, k) ?? null) as never, [market, req.kind]).catch(() => null);

@@ -8,8 +8,10 @@
   --border: #e6e4e0;
   --text: #1a1a1a;
   --muted: #6b6b6b;
-  --accent: #1f4fd8;
+  --accent: #0f5fd6;
   --accent-fg: #ffffff;
+  --shadow: 0 1px 2px rgba(16, 24, 40, 0.06), 0 1px 3px rgba(16, 24, 40, 0.1);
+  --shadow-md: 0 6px 16px -4px rgba(16, 24, 40, 0.16);
   --success: #1e7f4f;
   --warning: #b7791f;
   --danger: #b42318;
@@ -30,6 +32,8 @@
     --warning: #e0a84a;
     --danger: #f0665c;
     --ring: #5b8cff;
+    --shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
+    --shadow-md: 0 8px 20px -6px rgba(0, 0, 0, 0.6);
     color-scheme: dark;
   }
 }
@@ -86,3 +90,26 @@ body {
     transition: none !important;
   }
 }
+
+/* Product cards: a little lift and a clean hover, consistent everywhere. */
+.card-lift {
+  box-shadow: var(--shadow);
+  transition: box-shadow 160ms ease, transform 160ms ease;
+}
+.card-lift:hover {
+  box-shadow: var(--shadow-md);
+  transform: translateY(-1px);
+}
+.chip {
+  display: inline-flex;
+  align-items: center;
+  height: 30px;
+  padding: 0 12px;
+  border-radius: 9999px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  font-size: 13px;
+  white-space: nowrap;
+}
+.chip:hover { background: var(--surface-2); }
+.chip-on { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 10%, transparent); color: var(--accent); }

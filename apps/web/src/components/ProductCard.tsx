@@ -15,7 +15,7 @@ export function ProductCard({ item }: { item: FeedItem }) {
   return (
     <Link
       to={`/p/${product.id}`}
-      className="group flex flex-col overflow-hidden rounded-lg border border-border bg-surface transition-shadow hover:shadow-md focus-visible:shadow-md"
+      className="card-lift group flex flex-col overflow-hidden rounded-xl border border-border bg-surface"
     >
       <div className="relative aspect-square w-full overflow-hidden bg-surface-2">
         <img

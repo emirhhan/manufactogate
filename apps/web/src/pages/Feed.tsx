@@ -8,6 +8,8 @@ import { Empty, cn } from "@/components/ui";
 import { groupOf, leafOf, leavesOf, queryFeed, type SortKey } from "@/lib/catalog";
 import { useSearch } from "@/store/search";
 import { useSettings } from "@/store/settings";
+import { getDataSource } from "@/lib/registry";
+import { HomeReal } from "@/components/HomeReal";
 
 const SORTS: { key: SortKey; label: string }[] = [
   { key: "popular", label: "Popüler" },
@@ -61,6 +63,14 @@ export function Feed() {
     document.title = leaf ? `${leaf.tr} · Manufactogate` : group ? `${group.tr} · Manufactogate` : "Manufactogate";
   }, [leaf, group]);
 
+  const real = getDataSource() === "extension";
+  // In real-data mode a category is a live search across the enabled markets, not a mock catalog page.
+  useEffect(() => {
+    if (!real || !leaf || running) return;
+    const q = leaf.tr;
+    void start({ kind: "text", query: q }, enabled).then((id) => nav(`/search/${id}`, { replace: true }));
+  }, [real, leafKey]);
+
   return (
     <div className="mx-auto max-w-[1440px] px-4 py-5">
       {/* Hero search: image, link or text across the enabled markets */}
@@ -87,21 +97,18 @@ export function Feed() {
           </div>
         </div>
       )}
+      {real && !groupKey && !q && <HomeReal />}
       {/* Category rail */}
       <div className="-mx-4 mb-4 overflow-x-auto border-b border-border px-4 pb-3">
         <div className="flex gap-1.5 whitespace-nowrap text-[13px]">
-          <Link to="/categories" className="rounded-full border border-border px-3 py-1 font-medium hover:bg-surface-2">
-            Tüm kategoriler
+          <Link to="/categories" className="chip font-medium">
+            ☰ Tüm kategoriler
           </Link>
-          <Link to="/" className={cn("rounded-full border px-3 py-1", !groupKey ? "border-accent bg-accent/10 text-accent" : "border-border hover:bg-surface-2")}>
+          <Link to="/" className={cn("chip", !groupKey && "chip-on")}>
             Hepsi
           </Link>
           {TAXONOMY.map((g) => (
-            <Link
-              key={g.key}
-              to={`/c/${g.key}`}
-              className={cn("rounded-full border px-3 py-1", groupKey === g.key ? "border-accent bg-accent/10 text-accent" : "border-border hover:bg-surface-2")}
-            >
+            <Link key={g.key} to={`/c/${g.key}`} className={cn("chip", groupKey === g.key && "chip-on")}>
               {g.tr}
             </Link>
           ))}
@@ -111,6 +118,12 @@ export function Feed() {
       <div className="grid gap-6 lg:grid-cols-[240px_1fr]">
         {/* Sidebar */}
         <aside className="space-y-5 text-[13px]">
+          {real && (
+            <div className="rounded-lg border border-accent/30 bg-accent/5 p-3 text-[12px]">
+              <div className="font-medium text-accent">Gerçek veri modu</div>
+              <p className="mt-1 text-muted">Bir kategori seçmek seçili pazarlarda canlı arama başlatır. Aşağıdaki katalog yalnızca örnektir.</p>
+            </div>
+          )}
           {group ? (
             <div>
               <div className="mb-1.5 flex items-center justify-between">

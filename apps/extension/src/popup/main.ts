@@ -12,15 +12,26 @@ const LABEL: Record<SessionState, { text: string; cls: string }> = {
   unknown: { text: "giriş gerekmez", cls: "" },
 };
 
+/** Long operations go over a port so the service worker is not reaped mid-way. */
 function send<T extends ExtToWeb>(msg: WebToExt): Promise<T> {
-  return new Promise((resolve) => chrome.runtime.sendMessage(msg, (r: T) => resolve(r)));
+  return new Promise((resolve, reject) => {
+    const port = chrome.runtime.connect({ name: "mg" });
+    const id = crypto.randomUUID();
+    port.onMessage.addListener((m: { id: string; payload: T }) => {
+      if (m.id !== id) return;
+      port.disconnect();
+      resolve(m.payload);
+    });
+    port.onDisconnect.addListener(() => reject(new Error("bağlantı koptu")));
+    port.postMessage({ id, payload: msg });
+  });
 }
 const $ = (id: string) => document.getElementById(id)!;
 
 function renderMarkets(sessions: Partial<Record<MarketId, SessionState>>, health: Partial<Record<MarketId, HealthResult>>) {
   const ul = $("markets");
   ul.innerHTML = "";
-  for (const id of REAL_DEFS.map((d) => d.id)) {
+  for (const id of REAL_DEFS.map((d) => d.id).filter((m) => WAVE1.has(m))) {
     const st = LABEL[sessions[id] ?? "unknown"];
     const h = health[id];
     const li = document.createElement("li");
@@ -40,11 +51,14 @@ async function load() {
   renderMarkets(sessions, stored);
 }
 
+// Only the calibrated markets are listed in the popup; beta markets live in the app's settings.
+const WAVE1 = new Set<MarketId>(["cn-1688", "cn-taobao", "cn-pinduoduo", "tr-trendyol"]);
+
 $("health").addEventListener("click", async () => {
   const btn = $("health") as HTMLButtonElement;
   btn.disabled = true;
-  $("msg").textContent = "Her pazar için arama sayfası açılıyor, bu 1-2 dakika sürebilir…";
-  const r = await send<ExtToWeb & { type: "health" }>({ type: "health" });
+  $("msg").textContent = "Dört ana pazar için arama sayfası açılıyor, bu 1-2 dakika sürebilir…";
+  const r = await send<ExtToWeb & { type: "health" }>({ type: "health" }).catch(() => ({ type: "health", health: {} }) as ExtToWeb & { type: "health" });
   const { sessions } = await send<ExtToWeb & { type: "sessions" }>({ type: "sessions" });
   renderMarkets(sessions, r.health);
   $("msg").textContent = "Sağlık kontrolü tamamlandı.";

@@ -24,7 +24,7 @@ export function ResultCard({ listing, confidence, highlight = false }: { listing
   return (
     <Link
       to={`/l/${listing.market}/${listing.id}`}
-      className={cn("group flex flex-col overflow-hidden rounded-lg border bg-surface transition-shadow hover:shadow-md", highlight ? "border-accent ring-2 ring-accent/40" : "border-border")}
+      className={cn("card-lift group flex flex-col overflow-hidden rounded-xl border bg-surface", highlight ? "border-accent ring-2 ring-accent/40" : "border-border")}
     >
       <div className="relative aspect-square w-full overflow-hidden bg-surface-2">
         <MarketImage src={listing.images[0]} label={adapter?.meta.name ?? ""} loading="lazy" className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.03]" />

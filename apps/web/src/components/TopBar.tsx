@@ -13,7 +13,7 @@ export function TopBar({ extension, dataSource }: { extension: { installed: bool
     <header className="sticky top-0 z-20 h-12 border-b border-border bg-surface/90 backdrop-blur">
       <div className="mx-auto flex h-full max-w-[1440px] items-center gap-6 px-4">
         <Link to="/" className="flex items-center gap-2 font-semibold tracking-tight">
-          <span className="inline-block h-4 w-4 rounded-sm bg-accent" aria-hidden />
+          <span className="grid h-7 w-7 place-items-center rounded-lg bg-accent text-[13px] font-bold text-accent-fg" aria-hidden>M</span>
           Manufactogate
         </Link>
         <form

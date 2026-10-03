@@ -18,9 +18,10 @@ const BADGE_WORDS = Object.keys(BADGES_PINDUODUO);
 export const extractorPinduoduo: PageExtractor = {
   session(doc) {
     return detectSession(doc, {
-      loginHosts: /login\.html|\/login\b|passport/,
-      captchaMarkers: ["verify", "滑动验证", "安全验证", "风控"],
-      loggedInMarkers: ["\"uid\"", "个人中心", "我的订单"],
+      loginHosts: /login\.html|\/login\b|passport|\/auth/,
+      captchaMarkers: ["滑动验证", "安全验证", "风控", "请完成验证", "verify.html", "pdd_verify", "拖动滑块"],
+      loggedOutMarkers: ["login_tip", "class=\"login-page", "手机号登录"],
+      loggedInMarkers: ["\"uid\":\"", "个人中心", "我的订单", "ssrListData"],
     });
   },
   search(doc): SearchItem[] {
