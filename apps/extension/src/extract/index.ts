@@ -181,14 +181,25 @@ async function setImage(market: MarketId, dataUrl: string): Promise<ImageOutcome
     if (location.href !== href) return "ok";
     // Upload showed a preview but did not navigate: press the panel's own search button.
     const until = Date.now() + 4000;
-    let btn = findImageConfirm(document);
+    const confirm = () => {
+      try {
+        const own = ex?.imageConfirm?.(document);
+        if (own) return own;
+      } catch {
+        /* calibrated hook broke: use the generic finder */
+      }
+      return findImageConfirm(document);
+    };
+    let btn = confirm();
     while (!btn && Date.now() < until) {
       await sleep(300);
-      btn = findImageConfirm(document);
+      btn = confirm();
     }
     if (btn) {
       btn.click();
-      return (await reacted(3500)) || changed ? "ok" : "no-reaction";
+      // The click may navigate synchronously, before `reacted` starts watching.
+      if (location.href !== href) return "ok";
+      return (await reacted(3500)) || location.href !== href ? "ok" : "no-reaction";
     }
     return changed ? "ok" : "no-reaction";
   }

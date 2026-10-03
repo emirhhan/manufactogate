@@ -179,6 +179,10 @@ export const extractorTaobao: PageExtractor = {
     // The camera icon is wired to a hidden file input on the search page.
     return doc.querySelector<HTMLInputElement>("input[type=file][accept*='image'], input[type=file]");
   },
+  imageConfirm(doc) {
+    // Upload opens a preview with <div id="image-search-upload-button">搜索</div>; nothing navigates until it is clicked.
+    return doc.querySelector<HTMLElement>("#image-search-upload-button, [data-spm='image_search_button']");
+  },
 };
 
 export const defTaobao: RealMarketDef = {

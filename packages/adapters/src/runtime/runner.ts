@@ -80,4 +80,6 @@ export interface PageExtractor {
   supplier?(doc: Document): unknown | null;
   /** Finds the file input for image search; returns null when the page has none. */
   imageInput?(doc: Document): HTMLInputElement | null;
+  /** The button that starts the search once an uploaded image is previewed; null when none is showing. */
+  imageConfirm?(doc: Document): HTMLElement | null;
 }
