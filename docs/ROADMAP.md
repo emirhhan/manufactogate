@@ -21,29 +21,34 @@
 - Kalan: canlı sayfalardan fixture alıp seçicileri doğrulamak (docs/CALIBRATION.md),
   tarayıcıda CLIP embedding.
 
-## Durum (2026-10-03)
+## Durum (2026-10-03, bütünleştirme turu sonrası)
 
 | Sprint | Kapsam | Durum |
 |---|---|---|
 | 0 | Monorepo, çekirdek, sahte adapter, web ve eklenti iskeleti | Tamam |
-| 1 | Gerçek adapter'lar (1688, Taobao, Pinduoduo, Trendyol), eklenti çalıştırıcı | Tamam; dört pazarın arama ve detayı gerçek sayfalarla kalibre edildi |
-| 2 | Ana sayfa araması, gerçek ürün sayfası, pazarlar arası karşılaştırma, görsel arama tabanı | Tamam; görselle arama canlı doğrulama bekliyor |
+| 1 | Gerçek adapter'lar (1688, Taobao, Pinduoduo, Trendyol), eklenti çalıştırıcı | Tamam; 1688/Taobao/Trendyol canlı doğrulandı, Pinduoduo fixture |
+| 2 | Ana sayfa araması, gerçek ürün sayfası, pazarlar arası karşılaştırma, görsel arama tabanı | Tamam; görselle arama (1688 yükleme) canlı teyit bekliyor, Taobao yapıştırma doğrulandı |
 | 3 | Projeler, notlar, izleme listesi, CSV dışa aktarma, maliyet varsayımları | Tamam |
-| 4 | Sorgu yerelleştirme (Türkçe → Çince sözlük), görsel arama başarısızlığında başlıkla arama | Tamam |
-| 4b | Beta pazarlar: Alibaba.com, AliExpress, Hepsiburada, n11, Amazon TR (genel kart okuma; fixture ile kalibre edilecek) | Tamam, beta |
+| 4 | Sorgu yerelleştirme (Türkçe → pazar dili merdiveni: zh/en/ja/ko/ru/de/id/th), görsel arama başarısızlığında başlıkla arama | Tamam; merdiven pazar başına gönderilir, "Ne arandı?" panelinde görünür |
+| 4b | Beta pazarlar: Alibaba.com, AliExpress, Hepsiburada, n11, Amazon TR | Tamam, beta; Hepsiburada ve Amazon TR canlı, diğer üçünün yakalaması yok |
 | 4c | Karşılaştırma kalitesi: sorgu merdiveni, benzerlik filtresi, sayfalama, görsel yedek, captcha sonrası otomatik devam | Tamam |
-| 4d | Dalga 3 beta pazarlar: DHgate, Made-in-China, Global Sources, Yiwugo, IndiaMART, TradeIndia, Tokopedia, Shopee ID, Lazada TH, Rakuten, Mercari, Yahoo Auctions, Coupang, Gmarket, Amazon DE/US/UK, eBay, Walmart, Temu, Noon, Ozon, Wildberries | Tamam, beta (fixture ile kalibre edilecek) |
-| 4e | Ülke profilleri TR, DE, US, GB, AE, NL, PL, RO; gösterge para birimi; ülke başına maliyet ve marj tablosu ("hangi ülkeye satmak kârlı") | Tamam |
-| 5 | Tedarikçi zekâsı: fabrika mı aracı mı skoru, üreticiye izleme sıralaması, risk özeti | Sırada |
-| 6 | Kalite: altın veri seti, kalibrasyon, CLIP ile görsel doğrulama, ülke profili düzenleme, LLM çeviri (isteğe bağlı anahtar) | Sırada |
+| 4d | Dalga 3 beta pazarlar (DHgate … Wildberries, 24 pazar) | Tamam, beta; DHgate, Tokopedia, Lazada TH, eBay canlı; 11'i fixture; Made-in-China, Shopee, Rakuten, Coupang, Amazon DE/US/UK yakalama bekliyor |
+| 4e | Ülke profilleri TR, DE, US, GB, AE, NL, PL, RO; ülke başına maliyet ve marj tablosu | Tamam; kullanıcı oranları (KDV, gümrük, komisyon, aracı, yurt içi kargo) düzenlenebilir |
+| 4f | Bütünleştirme: uçtan uca iptal, canlı aşama zarfları, tek süre bütçesi (`TIMING`), satıcıya özel detay, yeni ilan alanları, overlay anlık görüntü, hızlı sağlık turu, pazar başına hız sınırı, 4173 kökeni, Mercari → `us-mercari` | Tamam (bkz. docs/STATUS.md "Bu turda kapanan açıklar") |
+| 5 | Tedarikçi zekâsı: fabrika mı aracı mı skoru (`traceScore`), üreticiye izleme sıralaması, kart sinyalleri, risk bayrakları | Büyük ölçüde tamam; çapraz mağaza birleştirme ve yorum temaları açık |
+| 6 | Kalite: altın veri seti (44/300), güven kalibrasyonu, CLIP, kaynak skoru ağırlıkları, bölge seçerek arama, LLM çeviri (isteğe bağlı anahtar) | Sırada |
 
 ### Bilinen açık noktalar
 
-- Görselle arama (1688 ve Taobao yükleme girişi) canlı sayfada henüz doğrulanmadı; başarısız olursa
-  başlıkla aramaya düşer ve pazar şeridinde ⓘ ile belirtilir.
-- Çeviri sözlüğü kategori adlarına dayanır; sözlük dışı kelimeler Çin pazarlarına olduğu gibi gider.
-- İzleme listesi fiyatları kullanıcı "Fiyatları yenile" dediğinde güncellenir; arka plan alarmı sonraki adım.
-- Pinduoduo arama sayfası ağır anti-bot kontrolüne sahiptir; "doğrulama" görülürse sekme açık bırakılır.
+- 9 pazarın hiç gerçek sayfa yakalaması yok (Alibaba.com, AliExpress, n11, Amazon US/UK/DE, Made-in-China,
+  Shopee ID, Rakuten, Coupang); seçiciler ilk canlı turda kırılabilir. Yakalama listesi docs/STATUS.md'de.
+- Görselle arama 1688 yükleme yolunda canlı doğrulanmadı; başarısız olursa başlık merdivenine düşer ve pazar
+  7 gün boyunca görseli atlar (`capabilityMemo`).
+- Çeviri sözlüğü kategori adlarına dayanır; sözlük dışı kelimeler İngilizce basamakta kalır veya son çare Türkçe gider.
+  Basamaklar görünür ama arayüzde düzenlenemez.
+- İzleme listesi fiyatları elle yenilenir; arka plan alarmı yok; `watch.ts` satıcı ipucu geçirmez.
+- Kur tablosu gösterge niteliğindedir (`REFERENCE_FX`, 7 günden eski ise uyarı); canlı kur yok.
+- Pinduoduo risk kontrolü sık; "Doğrulama gerekli" ile giriş sayfasına yönlendirilir, sekme açık bırakılır.
 
 ## Sprint 2 (başladı): Ürün sayfası ve pazarlar arası karşılaştırma
 

@@ -26,6 +26,23 @@ const TEXT: Record<AdapterErrorType, { title: string; hint: string }> = {
   Internal: { title: "İç hata", hint: "Bizim tarafımızda bir hata oluştu; tanı bölümündeki mesajı bildir." },
 };
 
+/**
+ * Errors whose message says the market wants the user to verify the session: Pinduoduo's
+ * risk-control empty list (thrown as RateLimited), "doğrulama", "verification", "captcha",
+ * "risk control", slider/puzzle challenges. Pure.
+ */
+const VERIFY_RE = /doğrulama|dogrulama|verification|verify|captcha|risk[ -]?control|risk kontrol|slider|puzzle|滑动验证|验证码|风控/i;
+export function needsVerification(type: AdapterErrorType | string, message: string | undefined): boolean {
+  if (type === "Captcha") return true;
+  if (type === "LoggedOut" || type === "NotFound" || type === "Internal") return false;
+  return !!message && VERIFY_RE.test(message);
+}
+
+const VERIFY_TEXT = {
+  title: "Doğrulama gerekli",
+  hint: "Pazar bu oturuma güvenmedi ve boş sonuç döndürdü. Pazarı kendi hesabınla aç, giriş yap ve bir arama yapıp doğrulamayı tamamla; sonra buradan yeniden dene.",
+} as const;
+
 /** Search URL of a real market for a query, when the registry knows the market. */
 export function marketSearchUrl(market: MarketId | string, query: string | undefined): string | null {
   const def = REAL_DEF_BY_ID[market as MarketId];
@@ -39,11 +56,16 @@ export function marketSearchUrl(market: MarketId | string, query: string | undef
 
 /** Describes a market failure with an actionable Turkish hint and, when possible, a link to act on. */
 export function describeError(type: AdapterErrorType | string, message: string | undefined, market: MarketId | string, query?: string): ErrorDescription {
-  const base = TEXT[type as AdapterErrorType] ?? { title: type, hint: message ?? "" };
   const def = REAL_DEF_BY_ID[market as MarketId];
   const msgUrl = message && /^https?:\/\/\S+$/.test(message.trim()) ? message.trim() : null;
+  const verify = type !== "Captcha" && needsVerification(type, message);
+  const base = verify ? VERIFY_TEXT : (TEXT[type as AdapterErrorType] ?? { title: type, hint: message ?? "" });
   let action: ErrorAction | undefined;
-  if (type === "LoggedOut") {
+  if (verify) {
+    // The market distrusts the session (Pinduoduo risk control and the like): log in and verify on the site itself.
+    const href = def?.meta.loginUrl ?? msgUrl ?? marketSearchUrl(market, query);
+    if (href) action = { label: "Doğrula / Giriş yap", href };
+  } else if (type === "LoggedOut") {
     const href = msgUrl ?? def?.meta.loginUrl ?? marketSearchUrl(market, query);
     if (href) action = { label: "Giriş yap", href };
   } else if (type === "Captcha") {
@@ -99,7 +121,7 @@ export function summarizeMarkets(markets: Record<string, MarketStatus>, listings
     } else if (st.state === "error") {
       s.errors++;
       (s.byType[st.type] ??= []).push(m);
-      if (st.type === "LoggedOut" || st.type === "Captcha") s.needsUser.push(m);
+      if (st.type === "LoggedOut" || needsVerification(st.type, st.message)) s.needsUser.push(m);
       else if (st.type === "SelectorBroken" || st.type === "Internal") s.broken.push(m);
       else if (st.type !== "NotFound") s.retryable.push(m);
     } else if (st.state === "running") s.running++;

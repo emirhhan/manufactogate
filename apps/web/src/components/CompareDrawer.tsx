@@ -2,15 +2,15 @@ import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { normalizeBadges } from "@manufactogate/core";
 import { BADGE_LABELS_TR } from "@manufactogate/adapters";
-import { getCountryProfile } from "@manufactogate/country-profiles";
 import { scenario, shippingKeyFor } from "@/lib/analysis";
 import { COMPARE_MAX, compareStore, useCompareItems, useCompareOpen } from "@/lib/compareStore";
 import { compareToCsv, download } from "@/lib/export";
-import { money, priceRange, soldText } from "@/lib/format";
+import { money } from "@/lib/format";
 import { getDisplayCurrency, minDisplay, minOf } from "@/lib/fx";
+import { counterLines, priceText, supplierSignals } from "@/lib/listingFields";
 import { marketTone } from "@/lib/markets";
 import { getRegistry } from "@/lib/registry";
-import { useSettings } from "@/store/settings";
+import { useCostProfile, useSettings } from "@/store/settings";
 import { MarketImage } from "./MarketImage";
 import { Badge, Button, cn } from "./ui";
 
@@ -26,7 +26,8 @@ export function CompareDrawer({ score }: { score?: ((l: { market: string; id: st
   const [qtyText, setQtyText] = useState("");
   const reg = getRegistry();
   const disp = getDisplayCurrency();
-  const profile = getCountryProfile(targetCountry) ?? getCountryProfile("tr")!;
+  // Target country profile with the user's KDV/commission/broker overrides applied (Settings).
+  const profile = useCostProfile();
   const qty = Number(qtyText) || null;
 
   useEffect(() => {
@@ -110,7 +111,7 @@ export function CompareDrawer({ score }: { score?: ((l: { market: string; id: st
               <Row label="Fiyat">
                 {rows.map((r) => (
                   <td key={r.listing.id} className="py-1.5 pr-3 tnum">
-                    <div className="font-medium">{priceRange(r.listing.price)}</div>
+                    <div className="font-medium">{priceText(r.listing)}</div>
                     {r.approx !== null && (
                       <div className={cn("text-[12px]", r.approx === cheapestApprox ? "text-success" : "text-muted")}>≈ {money(r.approx, disp)}{r.approx === cheapestApprox ? " · en düşük" : ""}</div>
                     )}
@@ -130,13 +131,14 @@ export function CompareDrawer({ score }: { score?: ((l: { market: string; id: st
                   </td>
                 ))}
               </Row>
-              <Row label="Sayaç">{rows.map((r) => <td key={r.listing.id} className="py-1.5 pr-3 tnum">{soldText(r.listing) || "—"}</td>)}</Row>
+              <Row label="Sayaç">{rows.map((r) => <td key={r.listing.id} className="py-1.5 pr-3 tnum">{counterLines(r.listing).map((c) => c.text).join(" · ") || "—"}</td>)}</Row>
               <Row label="Puan">{rows.map((r) => <td key={r.listing.id} className="py-1.5 pr-3 tnum">{r.listing.rating?.toFixed(1) ?? "—"}</td>)}</Row>
               <Row label="Satıcı">
                 {rows.map((r) => (
                   <td key={r.listing.id} className="py-1.5 pr-3">
                     <div className="truncate">{r.listing.supplierName ?? (r.listing.supplierId ? `Mağaza #${r.listing.supplierId}` : "—")}</div>
                     {r.listing.location && <div className="text-[11px] text-muted">{r.listing.location}</div>}
+                    {supplierSignals(r.listing).length > 0 && <div className="text-[11px] text-muted">{supplierSignals(r.listing).map((x) => x.label).join(" · ")}</div>}
                   </td>
                 ))}
               </Row>

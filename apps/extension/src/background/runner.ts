@@ -1,4 +1,4 @@
-import { REAL_DEF_BY_ID, WAVE1_IDS, type ExtractFailure, type ExtractRequest, type ExtractResult, type RealMarketDef } from "@manufactogate/adapters";
+import { REAL_DEF_BY_ID, TIMING, WAVE1_IDS, type ExtractFailure, type ExtractRequest, type ExtractResult, type RealMarketDef } from "@manufactogate/adapters";
 import type { AdapterErrorType, MarketId, SessionState } from "@manufactogate/core";
 import { extVersion, hostMatches, loadSettings, marketForUrl, type RunnerStatus, type RunStage, type Settings } from "../shared";
 import { TR, translateChromeError } from "./errors";
@@ -18,6 +18,8 @@ import { TabRegistry } from "./tabs";
 export interface RunOpts {
   /** Identifies the connection that asked; its disconnect cancels the request. */
   owner?: string;
+  /** Envelope id of the request on that connection; `{ type: "cancel", id }` from the page stops exactly this one. */
+  requestId?: string;
   signal?: AbortSignal;
   progress?: (stage: RunStage) => void;
   /** Wait in the foreground for the user to solve a visible captcha (default true; health checks pass false). */
@@ -67,6 +69,8 @@ const limiter = new MarketLimiter();
 const queue = new SlotQueue(3);
 const registry = new TabRegistry();
 const actives = new Set<Active>();
+/** Abort handles of queued and in-flight requests by `${owner}/${requestId}` (per-request cancel from the page). */
+const requests = new Map<string, AbortController>();
 const queued: { market: MarketId; kind: string; enqueuedAt: number; owner: string | null }[] = [];
 const notified = new Map<string, number>();
 const LIMITER_KEY = "mgLimiter";
@@ -624,15 +628,26 @@ export async function runExtract(req: ExtractRequest, opts: RunOpts = {}): Promi
     if (opts.signal.aborted) ac.abort();
     else opts.signal.addEventListener("abort", () => ac.abort(), { once: true });
   }
-  const timeoutMs = req.timeoutMs ?? (req.kind === "search" ? 25000 : req.kind === "health" ? 8000 : 20000);
+  // Budgets come from the shared TIMING table so the web bridge and the core deadline agree with them.
+  const timeoutMs = req.timeoutMs ?? TIMING.settleMs[req.kind] ?? TIMING.settleMs.search;
   const owner = opts.owner ?? null;
+  const requestKey = owner !== null && opts.requestId ? `${owner}/${opts.requestId}` : null;
+  if (requestKey) requests.set(requestKey, ac);
   const qEntry = { market, kind: req.kind, enqueuedAt: Date.now(), owner };
   queued.push(qEntry);
   progress("queued");
-  const got = await queue.acquire({ priority: priorityOf(req), budgetMs: timeoutMs + 60000, signal: ac.signal, label: owner ?? "" });
-  queued.splice(queued.indexOf(qEntry), 1);
-  if (got === "aborted") return failure("Network", TR.cancelled, req.url);
-  if (got === "expired") return failure("RateLimited", TR.queueFull(name), req.url);
+  let got: Awaited<ReturnType<SlotQueue["acquire"]>>;
+  try {
+    got = await queue.acquire({ priority: priorityOf(req), budgetMs: TIMING.queueBudgetMs, signal: ac.signal, label: owner ?? "" });
+  } finally {
+    queued.splice(queued.indexOf(qEntry), 1);
+  }
+  if (got !== "ok") {
+    if (requestKey) requests.delete(requestKey);
+    progress("done");
+    if (got === "aborted") return failure("Network", TR.cancelled, req.url);
+    return failure("RateLimited", TR.queueFull(name), req.url);
+  }
 
   const active: Active = { market, kind: req.kind, stage: "opening", tabId: null, startedAt: Date.now(), owner, abort: ac };
   actives.add(active);
@@ -657,7 +672,7 @@ export async function runExtract(req: ExtractRequest, opts: RunOpts = {}): Promi
       signal: ac.signal,
       settings,
       timeoutMs,
-      hardCap: t0 + timeoutMs + 45000,
+      hardCap: t0 + timeoutMs + TIMING.runSlackMs,
       t0,
       active,
       progress,
@@ -700,6 +715,7 @@ export async function runExtract(req: ExtractRequest, opts: RunOpts = {}): Promi
     return failure(t.type, t.text, req.url, { stage: active.stage });
   } finally {
     actives.delete(active);
+    if (requestKey) requests.delete(requestKey);
     queue.release();
     progress("done");
     if (tabId !== undefined && !(ctx?.keepTab ?? false)) await registry.close(tabId);
@@ -735,6 +751,14 @@ export function cancelOwner(owner: string): number {
     }
   }
   return n;
+}
+
+/** Cancels one request of a connection (the page's AbortSignal fired); false when it is not running any more. */
+export function cancelRequest(owner: string, requestId: string): boolean {
+  const ac = requests.get(`${owner}/${requestId}`);
+  if (!ac) return false;
+  ac.abort();
+  return true;
 }
 
 export function cancelAll(): number {

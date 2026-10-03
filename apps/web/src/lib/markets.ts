@@ -1,4 +1,5 @@
 import type { MarketAdapter, MarketId } from "@manufactogate/core";
+import { REAL_DEFS } from "@manufactogate/adapters";
 
 /**
  * Visual identity per market: one chip colour per marketplace so a grid mixing Alibaba, eBay,
@@ -34,7 +35,7 @@ const TONE: Record<string, string> = {
   "id-shopee": "bg-orange-500",
   "th-lazada": "bg-indigo-600",
   "jp-rakuten": "bg-red-600",
-  "jp-mercari": "bg-rose-500",
+  "us-mercari": "bg-rose-500",
   "jp-yahooauctions": "bg-red-500",
   "kr-coupang": "bg-pink-600",
   "kr-gmarket": "bg-lime-600",
@@ -74,7 +75,7 @@ const SHORT: Record<string, string> = {
   "id-shopee": "Shopee",
   "th-lazada": "Lazada",
   "jp-rakuten": "Rakuten",
-  "jp-mercari": "Mercari",
+  "us-mercari": "Mercari",
   "jp-yahooauctions": "Yahoo",
   "kr-coupang": "Coupang",
   "kr-gmarket": "Gmarket",
@@ -119,4 +120,54 @@ export function sellerDisplayName(l: { supplierName?: string | undefined; suppli
   if (l.supplierName) return l.supplierName;
   if (l.supplierId) return `Mağaza #${l.supplierId}`;
   return null;
+}
+
+/**
+ * Market ids that were renamed; stored settings (enabled markets, compare sets) are mapped on
+ * load so a rename never silently drops a market the user had turned on.
+ * `jp-mercari` → `us-mercari`: the Mercari adapter has always been the US site (USD, English).
+ */
+export const LEGACY_MARKET_IDS: Record<string, MarketId> = { "jp-mercari": "us-mercari" };
+
+/** Current id of a possibly legacy market id. Pure. */
+export function migrateMarketId(id: string): MarketId {
+  return LEGACY_MARKET_IDS[id] ?? (id as MarketId);
+}
+
+/** Maps legacy ids in a list, dropping duplicates the rename produced. Pure. */
+export function migrateMarketIds(ids: readonly string[]): MarketId[] {
+  const out: MarketId[] = [];
+  for (const id of ids) {
+    const m = migrateMarketId(id);
+    if (!out.includes(m)) out.push(m);
+  }
+  return out;
+}
+
+/**
+ * Recognises a listing URL with the live registry first and the real market definitions second,
+ * so a link handed over before the extension is detected (overlay → `/?link=`) still routes to the
+ * listing page instead of a text search. Pure apart from the registry read.
+ */
+export function resolveAnyMarket(url: string, reg: { resolve(u: string): { adapter: Pick<MarketAdapter, "id"> } | null }): { adapter: { id: MarketId } } | null {
+  const live = reg.resolve(url);
+  if (live) return { adapter: { id: live.adapter.id } };
+  const def = REAL_DEFS.find((d) => !!d.resolveLink(url));
+  return def ? { adapter: { id: def.id } } : null;
+}
+
+export type LinkRoute = { kind: "listing"; to: string; market: MarketId } | { kind: "text"; query: string };
+
+/**
+ * Where a URL handed to the app (extension overlay `/?link=`, pasted links) should go: a listing
+ * the registry recognises opens through `/l/resolve/<url>?compare=1` (the Listing page fetches the
+ * detail and starts the comparison); anything else becomes a plain text search with the URL as
+ * the query, like the search box does. Pure; `resolve` is `getRegistry().resolve`.
+ */
+export function linkRoute(raw: string, resolve: (url: string) => { adapter: Pick<MarketAdapter, "id"> } | null): LinkRoute | null {
+  const url = raw.trim();
+  if (!/^https?:\/\/\S+$/i.test(url)) return null;
+  const hit = resolve(url);
+  if (hit) return { kind: "listing", to: `/l/resolve/${encodeURIComponent(url)}?compare=1`, market: hit.adapter.id };
+  return { kind: "text", query: url };
 }

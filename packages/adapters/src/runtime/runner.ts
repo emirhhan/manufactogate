@@ -1,4 +1,4 @@
-import type { AdapterErrorType, MarketId } from "@manufactogate/core";
+import type { AdapterErrorType, AdapterProgress, MarketId } from "@manufactogate/core";
 
 /**
  * The PageRunner is what the extension provides to real adapters: it opens a market
@@ -43,8 +43,15 @@ export interface ExtractFailure {
   finalUrl?: string;
 }
 
+export interface RunnerOptions {
+  /** Aborting tells the runner to stop the request right away (queued or in flight) and resolve with a cancelled failure. */
+  signal?: AbortSignal;
+  /** Live stage of the request as the runner reports it. */
+  onProgress?: (progress: AdapterProgress) => void;
+}
+
 export interface PageRunner {
-  run<T = unknown>(req: ExtractRequest): Promise<ExtractResult<T> | ExtractFailure>;
+  run<T = unknown>(req: ExtractRequest, opts?: RunnerOptions): Promise<ExtractResult<T> | ExtractFailure>;
 }
 
 /** What a page-side probe reports about the page as a whole (beyond the items). */

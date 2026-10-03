@@ -22,7 +22,7 @@ import { getRegistry } from "@/lib/registry";
 import { relevance } from "@/lib/relevance";
 import { moveFocus, useShortcuts } from "@/lib/shortcuts";
 import { useFxOverrides } from "@/lib/useFx";
-import { useSearch } from "@/store/search";
+import { marketQueries, remainingMarkets, useSearch } from "@/store/search";
 import { useSettings } from "@/store/settings";
 
 type Sort = "relevance" | "match" | "price-asc" | "price-desc" | "sold" | "moq" | "rating";
@@ -117,7 +117,9 @@ export function Results() {
 
   const reg = getRegistry();
   const input = s.current?.input;
-  const queryText = input?.kind === "text" ? input.query : input?.kind === "image" ? (input.title ?? "") : "";
+  /** What the markets were really asked: the resolved listing's title/image for a link search. */
+  const effective = s.effective ?? (input?.kind === "link" ? undefined : input);
+  const queryText = effective?.kind === "text" ? effective.query : effective?.kind === "image" ? (effective.title ?? "") : "";
   const deferredListings = useDeferredValue(s.listings);
 
   const all = useMemo(() => {
@@ -201,9 +203,16 @@ export function Results() {
   }, [marketIds, reg, targetCountry, s.markets, s.listings]);
   const summary = useMemo(() => summarizeMarkets(s.markets, s.listings, { running: s.running, beta: (m) => isBeta(reg.get(m as MarketId)) }), [s.markets, s.listings, s.running, reg]);
   const runningNames = Object.entries(s.markets).filter(([, st]) => st.state === "running" || st.state === "pending").map(([m]) => reg.get(m as MarketId)?.meta.name ?? m);
+  const retryingNames = s.retrying.map((m) => reg.get(m as MarketId)?.meta.name ?? m);
+  const remaining = useMemo(() => (s.cancelled || !s.running ? remainingMarkets(s.markets) : []), [s.markets, s.cancelled, s.running]);
+  const retryingAny = s.retrying.length > 0;
 
   const marketName = (m: string) => reg.get(m as MarketId)?.meta.name ?? m;
-  const title = !input ? "" : input.kind === "image" ? (input.title ?? "Görsel araması") : input.kind === "link" ? input.url : input.query;
+  const title = !input ? "" : input.kind === "image" ? (input.title ?? "Görsel araması") : input.kind === "link" ? (s.resolved?.listing.title ?? input.url) : input.query;
+  const queryRows = useMemo(() => {
+    if (!effective || (effective.kind === "text" && !effective.perMarket) || (effective.kind === "image" && !effective.titles)) return [];
+    return marketIds.map((m) => ({ market: m, ...marketQueries(effective, m, s.trace[m]) })).filter((r) => r.tried.length + r.untried.length > 0);
+  }, [effective, marketIds, s.trace]);
   useEffect(() => {
     if (title) document.title = `${title} · ${total} sonuç · Manufactogate`;
     return () => {
@@ -253,6 +262,8 @@ export function Results() {
           <div className="text-[12px] text-muted tnum">
             {total} sonuç · {summary.withResults}/{marketIds.length} pazar sonuç verdi
             {duration !== null ? ` · ${duration.toFixed(1)} sn` : s.running ? " · aranıyor…" : ""}
+            {retryingAny && <span className="text-accent"> · {COPY.search.retryingMarkets}: {retryingNames.join(", ")}</span>}
+            {s.fingerprintPending > 0 && <span> · {COPY.search.fingerprinting(s.fingerprintPending)}</span>}
             {s.current.sourceKey && (
               <>
                 {" · "}
@@ -265,7 +276,7 @@ export function Results() {
           <Button onClick={() => download(`manufactogate-${Date.now()}.csv`, listingsToCsv(visible, marketName, { score: scoreOf, meta: exportMeta }))} disabled={visible.length === 0}>CSV</Button>
           <Button onClick={() => download(`manufactogate-${Date.now()}.xls`, listingsToXls(visible, marketName, { score: scoreOf, meta: exportMeta }), "application/vnd.ms-excel")} disabled={visible.length === 0}>Excel</Button>
           <Button onClick={printPage} disabled={visible.length === 0}>PDF</Button>
-          {s.running ? <Button onClick={s.cancel}>Durdur</Button> : <Link to="/"><Button variant="primary">Yeni arama</Button></Link>}
+          {s.running ? <Button onClick={s.cancel}>Durdur</Button> : <Link to="/"><Button variant="primary">{COPY.search.newSearch}</Button></Link>}
           <button onClick={() => setHelp((v) => !v)} className="text-[11px] text-accent hover:underline" aria-expanded={help}><Kbd>?</Kbd></button>
         </div>
       </div>
@@ -281,19 +292,59 @@ export function Results() {
         </Card>
       )}
 
+      {s.error && (
+        <div role="alert" data-banner="error" className="mt-3 flex flex-wrap items-center gap-2 rounded-md border border-danger/40 bg-danger/10 px-3 py-2 text-[13px] text-danger print:hidden">
+          <span className="font-medium">{COPY.search.failed}:</span>
+          <span>{s.error}</span>
+          <Link to="/" className="ml-auto text-accent hover:underline">{COPY.search.newSearch}</Link>
+        </div>
+      )}
+      {s.cancelled && !s.running && (
+        <div role="status" data-banner="cancelled" className="mt-3 flex flex-wrap items-center gap-2 rounded-md border border-border bg-surface px-3 py-2 text-[13px] print:hidden">
+          <span>{COPY.search.cancelled}</span>
+          {remaining.length > 0 && <span className="text-muted">{COPY.search.remaining(remaining.length)}</span>}
+          {remaining.length > 0 && (
+            <Button size="sm" className="ml-auto" onClick={() => void s.retryRemaining()} disabled={retryingAny}>
+              {retryingAny ? COPY.search.retrying : COPY.search.retryRemaining(remaining.length)}
+            </Button>
+          )}
+        </div>
+      )}
+      {s.warning && (
+        <div role="status" data-banner="warning" className="mt-3 rounded-md border border-warning/40 bg-warning/10 px-3 py-2 text-[12px] text-warning print:hidden">{s.warning}</div>
+      )}
+      {s.storageNote && (
+        <div role="status" data-banner="storage" className="mt-3 rounded-md border border-warning/40 bg-warning/10 px-3 py-2 text-[12px] text-warning print:hidden">{s.storageNote}</div>
+      )}
       <div className="mt-3 print:hidden">
-        <MarketPanel markets={s.markets} notes={s.notes} listings={s.listings} query={queryText} onRetry={(m) => void s.retryMarket(m)} onSkipProblem={skipProblem} running={s.running} />
+        <MarketPanel markets={s.markets} notes={s.notes} listings={s.listings} query={queryText} onRetry={(m) => void s.retryMarket(m)} onSkipProblem={skipProblem} running={s.running} retrying={s.retrying} trace={s.trace} input={effective} />
       </div>
-      {(input.kind === "text" && input.perMarket) || (input.kind === "image" && input.titles) ? (
-        <details className="mt-2 text-[12px] text-muted print:hidden">
-          <summary className="cursor-pointer select-none">Ne arandı? Pazar başına sorgu</summary>
-          <ul className="mt-1 grid gap-x-6 gap-y-0.5 sm:grid-cols-2 lg:grid-cols-3">
-            {Object.entries((input.kind === "text" ? input.perMarket : input.kind === "image" ? input.titles : {}) ?? {}).map(([m, q]) => (
-              <li key={m} className="truncate" title={Array.isArray(q) ? q.join(" → ") : String(q)}>
-                <span className="text-text">{marketName(m)}</span>: {Array.isArray(q) ? q.join(" → ") : String(q)}
-              </li>
-            ))}
-          </ul>
+      {queryRows.length > 0 || s.resolved ? (
+        <details className="mt-2 text-[12px] text-muted print:hidden" data-what-searched>
+          <summary className="cursor-pointer select-none">{COPY.search.whatSearched}</summary>
+          {s.resolved && (
+            <div className="mt-1">
+              {COPY.search.resolved}: <span className="text-text">{marketName(s.resolved.market)}</span> · {s.resolved.listing.title}
+            </div>
+          )}
+          {queryRows.length > 0 && (
+            <>
+              <ul className="mt-1 grid gap-x-6 gap-y-0.5 sm:grid-cols-2 lg:grid-cols-3">
+                {queryRows.map((r) => (
+                  <li key={r.market} className="truncate" data-query-row={r.market} title={[...r.tried, ...r.untried].join(" → ")}>
+                    <span className="text-text">{marketName(r.market)}</span>:{" "}
+                    {r.tried.map((q, i) => (
+                      <span key={`t${i}`} className="text-text" data-tried>{i > 0 ? " → " : ""}{q}</span>
+                    ))}
+                    {r.untried.map((q, i) => (
+                      <span key={`u${i}`} className="opacity-60" data-untried>{r.tried.length + i > 0 ? " → " : ""}{q}</span>
+                    ))}
+                  </li>
+                ))}
+              </ul>
+              <div className="mt-1 text-[11px]">{COPY.search.whatSearchedHint}</div>
+            </>
+          )}
         </details>
       ) : null}
 

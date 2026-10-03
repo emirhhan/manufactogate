@@ -36,8 +36,8 @@ export const US = base({
   ],
   salesVatRate: 0,
   commissionVatRate: 0,
-  marketplaces: ["us-amazon", "us-ebay", "us-walmart", "us-temu", "jp-mercari"],
-  commissions: { "us-amazon": 0.15, "us-ebay": 0.136, "us-walmart": 0.15, "us-temu": 0.1, "jp-mercari": 0.1 },
+  marketplaces: ["us-amazon", "us-ebay", "us-walmart", "us-temu", "us-mercari"],
+  commissions: { "us-amazon": 0.15, "us-ebay": 0.136, "us-walmart": 0.15, "us-temu": 0.1, "us-mercari": 0.1 },
   notes: [
     "ABD'de 800 $ de minimis muafiyeti 29 Ağustos 2025'te tüm menşeler için kaldırıldı (Çin için 2 Mayıs 2025).",
     "Section 301 listeleri: çoğu kalemde %25, 4A listesinde %7,5; IEEPA/karşılıklı tarifeler değişkendir ve ayrıca kontrol edilmelidir.",
@@ -178,7 +178,7 @@ export const JP = base({
   commissionVatRate: 0.1,
   marketplaces: ["jp-rakuten", "jp-yahooauctions"],
   commissions: { "jp-rakuten": 0.1, "jp-yahooauctions": 0.1 },
-  notes: ["10.000 ¥ altı gönderilerde gümrük vergisi ve tüketim vergisi muafiyeti vardır (ticari ithalatta uygulanmaz).", "Mercari ABD sürümü ABD profili altında listelenir."],
+  notes: ["10.000 ¥ altı gönderilerde gümrük vergisi ve tüketim vergisi muafiyeti vardır (ticari ithalatta uygulanmaz).", "Mercari ABD sitesi (us-mercari) ABD profili altında listelenir."],
 });
 
 export const KR = base({

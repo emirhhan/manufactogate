@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { formatAge, formatRemaining, hostMatches, marketForUrl, normalizeSettings } from "./shared";
+import { formatAge, formatRemaining, hostMatches, marketForUrl, normalizeSettings, overlayAllowed } from "./shared";
 
 describe("hostMatches", () => {
   it("accepts the bare host and subdomains of a wildcard pattern", () => {
@@ -38,6 +38,18 @@ describe("settings and formatting", () => {
     expect(s.captchaWaitMs).toBe(0);
     expect(normalizeSettings(undefined).separateWindow).toBe(true);
     expect(normalizeSettings({ appOrigin: "https://mg.example/" }).appOrigin).toBe("https://mg.example");
+  });
+  it("sanitises per-market rate limits and per-site overlay switches", () => {
+    const s = normalizeSettings({ rateLimit: { "cn-1688": { minIntervalMs: 12000, maxPerHour: 40 }, "tr-trendyol": { minIntervalMs: -1 }, "us-ebay": "x" }, overlaySites: { "trendyol.com": false, "1688.com": true, "bad host": false } });
+    expect(s.rateLimit).toEqual({ "cn-1688": { minIntervalMs: 12000, maxPerHour: 40 } });
+    expect(s.overlaySites).toEqual({ "trendyol.com": false });
+    expect(normalizeSettings(undefined).overlaySites).toEqual({});
+  });
+  it("overlayAllowed honours the global switch and per-site switches with subdomains", () => {
+    expect(overlayAllowed("www.trendyol.com", { overlay: true, overlaySites: {} })).toBe(true);
+    expect(overlayAllowed("www.trendyol.com", { overlay: false, overlaySites: {} })).toBe(false);
+    expect(overlayAllowed("www.trendyol.com", { overlay: true, overlaySites: { "trendyol.com": false } })).toBe(false);
+    expect(overlayAllowed("detail.1688.com", { overlay: true, overlaySites: { "trendyol.com": false } })).toBe(true);
   });
   it("formats countdowns and ages in Turkish", () => {
     expect(formatRemaining(35000)).toBe("35 sn");

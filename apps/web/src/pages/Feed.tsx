@@ -12,6 +12,7 @@ import { Button, Empty, Input, Select, SkeletonGrid, cn, usePageTitle } from "@/
 import { groupOf, leafOf, leavesOf, queryFeed, type SortKey } from "@/lib/catalog";
 import { listingsWriteVersion } from "@/lib/db";
 import { money } from "@/lib/format";
+import { linkRoute, resolveAnyMarket } from "@/lib/markets";
 import { getRegistry } from "@/lib/registry";
 import { loadRealCatalog, queryRealCatalog, type Classified, type RealFeedPage } from "@/lib/realCatalog";
 import { useExtension } from "@/store/extension";
@@ -38,7 +39,9 @@ function heroFacts(enabledIds: string[], targetCountry: string) {
 
 /**
  * Catalog feed: 30 products per page, filtered by group or leaf category and free text.
- * Routes: "/", "/c/:group", "/c/:group/:leaf". Query: ?q=&sort=&page=&market=
+ * Routes: "/", "/c/:group", "/c/:group/:leaf". Query: ?q=&sort=&page=&market=&link=
+ * `?link=<url>` is the extension overlay's entry (Journey D): a recognised listing URL is
+ * forwarded to `/l/resolve/<url>?compare=1`, any other URL becomes a text search.
  */
 export function Feed() {
   const { group: groupKey, leaf: leafKey } = useParams();
@@ -52,6 +55,7 @@ export function Feed() {
   const real = dataSource === "extension";
 
   const q = sp.get("q") ?? "";
+  const link = sp.get("link");
   const market = sp.get("market") ?? "";
   const sort = (sp.get("sort") as SortKey | null) ?? "popular";
   const page = Number(sp.get("page") ?? "1") || 1;
@@ -82,6 +86,38 @@ export function Feed() {
   };
 
   usePageTitle(leaf ? leaf.tr : group ? group.tr : q ? `“${q}”` : undefined);
+
+  // Overlay hand-off: `/?link=<url>` (apps/extension overlay "Diğer pazarlarda karşılaştır").
+  useEffect(() => {
+    if (!link) return;
+    const route = linkRoute(link, (u) => resolveAnyMarket(u, getRegistry()));
+    if (!route) {
+      const next = new URLSearchParams(sp);
+      next.delete("link");
+      setSp(next, { replace: true });
+      return;
+    }
+    if (route.kind === "listing") {
+      nav(route.to, { replace: true });
+      return;
+    }
+    if (running || !enabled.length) {
+      // Cannot start a live search now: keep the URL as a catalog query so nothing is lost.
+      const next = new URLSearchParams(sp);
+      next.delete("link");
+      next.set("q", route.query);
+      setSp(next, { replace: true });
+      return;
+    }
+    let alive = true;
+    void start({ kind: "text", query: route.query }, enabled).then((id) => {
+      if (alive) nav(`/search/${id}`, { replace: true });
+    });
+    return () => {
+      alive = false;
+    };
+    // Only the link parameter should re-trigger the hand-off.
+  }, [link]);
 
   // Real-data mode: the catalog is every listing pulled so far, classified into the taxonomy on this device.
   const [realItems, setRealItems] = useState<Classified[] | null>(null);

@@ -2,10 +2,11 @@ import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import type { MarketId, RawListing, RawSupplier } from "@manufactogate/core";
 import { COUNTRY_NAMES_TR } from "@manufactogate/country-profiles";
-import { rankManufacturers, supplierRisk, supplierScore } from "@/lib/analysis";
+import { rankManufacturers, supplierRisk, supplierScore, traceContextOf } from "@/lib/analysis";
 import { db, getSetting, setSetting } from "@/lib/db";
 import { money, pct } from "@/lib/format";
 import { minOf } from "@/lib/fx";
+import { supplierSignals } from "@/lib/listingFields";
 import { marketTone, sellerDisplayName, storeUrl } from "@/lib/markets";
 import { getRegistry } from "@/lib/registry";
 import { useSettings } from "@/store/settings";
@@ -105,8 +106,10 @@ export function SupplierPanel({ listing, peers = [] }: { listing: RawListing; pe
   }, [listing.market, listing.supplierId, listing.supplierName, listing.id, supplierKey]);
 
   const profile = profileState.profile;
-  const s = useMemo(() => supplierScore(listing, profile), [listing, profile]);
+  // Core trace scorer: badges + shop profile (or the card's own years/verified/business type) + price position among peers.
+  const s = useMemo(() => supplierScore(listing, profile, traceContextOf([listing, ...peers], listing.price.currency)), [listing, profile, peers]);
   const risks = useMemo(() => supplierRisk(listing, profile, peers), [listing, profile, peers]);
+  const cardSignals = useMemo(() => supplierSignals(listing, profile), [listing, profile]);
   const ranking = useMemo(() => {
     const pool = peers.filter((p) => !(p.market === listing.market && p.id === listing.id));
     if (pool.length < 2) return [];
@@ -163,6 +166,13 @@ export function SupplierPanel({ listing, peers = [] }: { listing: RawListing; pe
           </a>
         )}
       </div>
+      {cardSignals.length > 0 && (
+        <div className="mt-1.5 flex flex-wrap gap-1.5">
+          {cardSignals.map((x) => (
+            <Badge key={x.key} tone={x.tone === "success" ? "success" : x.tone === "warning" ? "warning" : "neutral"}>{x.label}</Badge>
+          ))}
+        </div>
+      )}
       {s.reasons.length > 0 && <div className="mt-1 text-[12px] text-muted">{s.reasons.join(" · ")}</div>}
 
       <div className="mt-3 grid gap-3 md:grid-cols-[1fr_1fr]">
@@ -181,6 +191,14 @@ export function SupplierPanel({ listing, peers = [] }: { listing: RawListing; pe
               {profile.responseRate !== undefined && (<><dt className="text-muted">Yanıt oranı</dt><dd>{pct(profile.responseRate)}{profile.responseTime ? ` · ${profile.responseTime}` : ""}</dd></>)}
               {profile.mainCategories?.length ? (<><dt className="text-muted">Ana gruplar</dt><dd>{profile.mainCategories.join(", ")}</dd></>) : null}
               {profile.badges.length > 0 && (<><dt className="text-muted">Etiketler</dt><dd className="flex flex-wrap gap-1">{profile.badges.map((b) => <Badge key={b}>{b}</Badge>)}</dd></>)}
+            </dl>
+          ) : listing.supplier && Object.keys(listing.supplier).length ? (
+            <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5 tnum">
+              {listing.supplier.years !== undefined && (<><dt className="text-muted">Pazarda</dt><dd>{listing.supplier.years} yıl</dd></>)}
+              {listing.supplier.businessType && listing.supplier.businessType !== "unknown" && (<><dt className="text-muted">Tür</dt><dd>{listing.supplier.businessType === "factory" ? "Üretici" : "Ticaret"}</dd></>)}
+              {listing.supplier.verified && (<><dt className="text-muted">Doğrulama</dt><dd>Pazar tarafından doğrulanmış</dd></>)}
+              {listing.supplier.rating !== undefined && (<><dt className="text-muted">Mağaza puanı</dt><dd>{(listing.supplier.rating > 5 ? listing.supplier.rating / 20 : listing.supplier.rating).toFixed(1)}{listing.supplier.ratingCount ? ` (${listing.supplier.ratingCount.toLocaleString("tr-TR")})` : ""}</dd></>)}
+              <dt className="text-muted">Kaynak</dt><dd className="text-muted">ilan kartı{adapter?.meta.capabilities.supplierProfile ? "; mağaza sayfası okunursa güncellenir" : ""}</dd>
             </dl>
           ) : (
             <p className="text-muted">

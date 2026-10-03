@@ -1,9 +1,11 @@
+import { useMemo } from "react";
 import { create } from "zustand";
-import type { MarketId } from "@manufactogate/core";
+import { applyCountryOverrides, sanitizeCountryOverrides, type CountryOverrides, type CountryProfile, type MarketId } from "@manufactogate/core";
 import { REAL_DEF_BY_ID } from "@manufactogate/adapters";
 import { COUNTRY_PROFILES } from "@manufactogate/country-profiles";
 import { getSettingStrict, setSetting } from "@/lib/db";
 import { FX_TO_TRY, setDisplayCurrency, setRateOverride, type DisplayCurrency } from "@/lib/fx";
+import { migrateMarketIds } from "@/lib/markets";
 
 export type Theme = "system" | "light" | "dark";
 export type DataSourcePref = "auto" | "mock" | "extension";
@@ -13,7 +15,9 @@ export interface CostSettings {
   defaultWeightKg: number;
   overheadRate: number;
 }
-export const DEFAULT_COST: CostSettings = { fxCnyTry: 4.7, shippingKey: "air", defaultWeightKg: 0.5, overheadRate: 0.08 };
+/** The CNY pin defaults to the dated reference table (core REFERENCE_FX via FX_TO_TRY) so a fresh install is not stuck on an old hand-typed rate. */
+const REFERENCE_CNY_TRY = Math.round((FX_TO_TRY["CNY"] ?? 4.7) * 100) / 100;
+export const DEFAULT_COST: CostSettings = { fxCnyTry: REFERENCE_CNY_TRY, shippingKey: "air", defaultWeightKg: 0.5, overheadRate: 0.08 };
 
 /** Results requested per market; the extension walks result pages until it has that many. */
 export const MAX_PER_MARKET_OPTIONS = [150, 300, 600] as const;
@@ -30,15 +34,35 @@ export type FxRates = Partial<Record<string, number>>;
 /** Mirror of the theme for the inline bootstrap in index.html (no flash of the wrong theme). */
 export const THEME_STORAGE_KEY = "mg-theme";
 
-/**
- * Markets confirmed working in the user's own browser: two Chinese sources plus the Turkish
- * targets, so the first search already yields a "pazarda satılır mı" answer. Pinduoduo stays
- * off by default (fragile login) but is one click away in Settings.
- */
-export const DEFAULT_MARKETS: MarketId[] = ["cn-1688", "cn-taobao", "tr-trendyol", "tr-hepsiburada", "tr-amazon"];
+/** Wave-1 markets: the four adapters with hand-calibrated selectors (not generic card reading). */
+export const WAVE1_MARKETS: MarketId[] = ["cn-1688", "cn-taobao", "cn-pinduoduo", "tr-trendyol"];
 
-/** Markets the user reported as returning results live (presets in Settings fall back to this). */
+/**
+ * Markets the user saw returning results live in their own browser (2026-10 calibration round):
+ * 1688, Taobao, Trendyol, Hepsiburada, Amazon TR, DHgate, Tokopedia, Lazada TH, eBay. The
+ * "Çalışanlar" preset in Settings falls back to this list when no health round has run yet.
+ */
 export const VERIFIED_MARKETS: MarketId[] = ["cn-1688", "cn-taobao", "tr-trendyol", "tr-hepsiburada", "tr-amazon", "cn-dhgate", "id-tokopedia", "th-lazada", "us-ebay"];
+
+/**
+ * Enabled set of a fresh install: wave-1 plus every verified market, in that order, so the first
+ * search already pairs Chinese sources with Turkish targets ("pazarda satılır mı") and the
+ * verified beta markets. Pinduoduo is in because it is wave-1; its fragile login is explained
+ * per market in Settings and the user can switch it off there.
+ */
+export const DEFAULT_MARKETS: MarketId[] = [...new Set([...WAVE1_MARKETS, ...VERIFIED_MARKETS])];
+
+/** Per-country user figures (KDV, duty default, commissions, broker/domestic, preferred shipping). */
+export type CountryOverridesMap = Record<string, CountryOverrides>;
+/** Patch for `setCountryOverrides`: `null` removes a field; a `null` commission removes that marketplace's override. */
+export interface CountryOverridesPatch {
+  vatRate?: number | null;
+  dutyDefaultRate?: number | null;
+  brokerFee?: number | null;
+  domesticShippingPerUnit?: number | null;
+  shippingKey?: string | null;
+  commissions?: Record<string, number | null> | null;
+}
 
 interface SettingsState {
   theme: Theme;
@@ -49,6 +73,8 @@ interface SettingsState {
   displayCurrency: DisplayCurrency;
   search: SearchSettings;
   fxRates: FxRates;
+  /** User-edited cost figures by target country; absent fields keep the dated reference profile. */
+  countryOverrides: CountryOverridesMap;
   onboardingDismissedAt: string | null;
   hydrated: boolean;
   /** Set when IndexedDB could not be read; the app still renders with defaults. */
@@ -63,6 +89,10 @@ interface SettingsState {
   setDisplayCurrency(c: DisplayCurrency): void;
   setSearch(s: Partial<SearchSettings>): void;
   setFxRate(code: string, rate: number | null): void;
+  /** Merges a patch into a country's overrides; `null` on a field removes that override. */
+  setCountryOverrides(country: string, patch: CountryOverridesPatch): void;
+  /** Drops every override of a country (back to the dated reference profile). */
+  resetCountryOverrides(country: string): void;
   dismissOnboarding(): void;
 }
 
@@ -95,8 +125,9 @@ const TARGET_PREFERENCE: MarketId[] = ["tr-trendyol", "tr-hepsiburada", "tr-amaz
  * Drops ids the registry no longer knows and guarantees at least one market that sells in the
  * target country, so sellability analysis has target data. Pure.
  */
-export function sanitizeMarkets(ids: MarketId[], targetCountry: string, known = knownMarketIds()): MarketId[] {
-  const out = ids.filter((id, i) => known.has(id) && ids.indexOf(id) === i);
+export function sanitizeMarkets(ids: readonly string[], targetCountry: string, known = knownMarketIds()): MarketId[] {
+  const migrated = migrateMarketIds(ids);
+  const out = migrated.filter((id, i) => known.has(id) && migrated.indexOf(id) === i);
   const sellsIn = (id: MarketId) => {
     const d = REAL_DEF_BY_ID[id];
     return !!d && d.meta.country === targetCountry && d.meta.role !== "source";
@@ -108,11 +139,36 @@ export function sanitizeMarkets(ids: MarketId[], targetCountry: string, known = 
   return out;
 }
 
-/** The shipping key to keep after a country change: the current one when the profile offers it, else its first option. Pure. */
-export function shippingKeyFor(country: string, current: string): string {
+/**
+ * The shipping key to keep after a country change: the country's saved preference when it exists
+ * in the profile, else the current one when the profile offers it, else its first option. Pure.
+ */
+export function shippingKeyFor(country: string, current: string, preferred?: string): string {
   const opts = COUNTRY_PROFILES[country]?.shipping ?? [];
+  if (preferred && opts.some((o) => o.key === preferred)) return preferred;
   if (!opts.length || opts.some((o) => o.key === current)) return current;
   return opts[0]!.key;
+}
+
+/** Sanitizes every stored country override map entry; unknown countries and empty entries are dropped. Pure. */
+export function sanitizeCountryOverridesMap(raw: unknown): CountryOverridesMap {
+  const out: CountryOverridesMap = {};
+  if (!raw || typeof raw !== "object") return out;
+  for (const [country, o] of Object.entries(raw as Record<string, unknown>)) {
+    if (!COUNTRY_PROFILES[country]) continue;
+    const s = sanitizeCountryOverrides(o as CountryOverrides);
+    if (Object.keys(s).length) out[country] = s;
+  }
+  return out;
+}
+
+/**
+ * The profile the cost and margin code should use for a country: the dated reference with the
+ * user's overrides applied (falls back to Türkiye for unknown countries). Pure.
+ */
+export function effectiveProfile(country: string, overrides: CountryOverridesMap): CountryProfile {
+  const ref = COUNTRY_PROFILES[country] ?? COUNTRY_PROFILES["tr"]!;
+  return applyCountryOverrides(ref, overrides[ref.country]);
 }
 
 export const useSettings = create<SettingsState>((set, get) => ({
@@ -124,6 +180,7 @@ export const useSettings = create<SettingsState>((set, get) => ({
   displayCurrency: "TRY",
   search: DEFAULT_SEARCH,
   fxRates: {},
+  countryOverrides: {},
   onboardingDismissedAt: null,
   hydrated: false,
   storageError: null,
@@ -143,8 +200,9 @@ export const useSettings = create<SettingsState>((set, get) => ({
       const storedMarkets = await read<MarketId[]>("enabledMarkets", DEFAULT_MARKETS);
       const enabledMarkets = sanitizeMarkets(storedMarkets, targetCountry);
       const dataSource = await read<DataSourcePref>("dataSource", "auto");
+      const countryOverrides = sanitizeCountryOverridesMap(await read<unknown>("countryOverrides", {}));
       const cost = { ...DEFAULT_COST, ...(await read<Partial<CostSettings>>("cost", {})) };
-      cost.shippingKey = shippingKeyFor(targetCountry, cost.shippingKey);
+      cost.shippingKey = shippingKeyFor(targetCountry, cost.shippingKey, countryOverrides[targetCountry]?.shippingKey);
       const displayCurrency = await read<DisplayCurrency>("displayCurrency", "TRY");
       const search = { ...DEFAULT_SEARCH, ...(await read<Partial<SearchSettings>>("search", {})) };
       const fxRates: FxRates = { CNY: cost.fxCnyTry, ...(await read<FxRates>("fxRates", {})) };
@@ -153,7 +211,7 @@ export const useSettings = create<SettingsState>((set, get) => ({
       setDisplayCurrency(displayCurrency);
       applyFx(fxRates);
       applyTheme(theme);
-      set({ theme, enabledMarkets, targetCountry, dataSource, cost, displayCurrency, search, fxRates, onboardingDismissedAt, hydrated: true, storageError });
+      set({ theme, enabledMarkets, targetCountry, dataSource, cost, displayCurrency, search, fxRates, countryOverrides, onboardingDismissedAt, hydrated: true, storageError });
       if (enabledMarkets.length !== storedMarkets.length || enabledMarkets.some((m, i) => m !== storedMarkets[i])) void setSetting("enabledMarkets", enabledMarkets).catch(() => undefined);
     } catch (e) {
       // Even a failing database must not leave a blank page: render with defaults and say why.
@@ -172,12 +230,13 @@ export const useSettings = create<SettingsState>((set, get) => ({
   },
   setEnabledMarkets(ids) {
     const known = knownMarketIds();
-    const next = ids.filter((id, i) => known.has(id) && ids.indexOf(id) === i);
+    const migrated = migrateMarketIds(ids);
+    const next = migrated.filter((id, i) => known.has(id) && migrated.indexOf(id) === i);
     set({ enabledMarkets: next });
     void setSetting("enabledMarkets", next).catch(() => undefined);
   },
   setTargetCountry(c) {
-    const cost = { ...get().cost, shippingKey: shippingKeyFor(c, get().cost.shippingKey) };
+    const cost = { ...get().cost, shippingKey: shippingKeyFor(c, get().cost.shippingKey, get().countryOverrides[c]?.shippingKey) };
     set({ targetCountry: c, cost });
     void setSetting("targetCountry", c).catch(() => undefined);
     void setSetting("cost", cost).catch(() => undefined);
@@ -201,6 +260,8 @@ export const useSettings = create<SettingsState>((set, get) => ({
     }
     set({ cost, fxRates });
     void setSetting("cost", cost).catch(() => undefined);
+    // The shipping method is remembered per target country so switching countries and back keeps it.
+    if (c.shippingKey !== undefined && c.shippingKey !== get().countryOverrides[get().targetCountry]?.shippingKey) get().setCountryOverrides(get().targetCountry, { shippingKey: c.shippingKey });
   },
   setSearch(s) {
     const search = { ...get().search, ...s };
@@ -217,12 +278,48 @@ export const useSettings = create<SettingsState>((set, get) => ({
     void setSetting("fxRates", fxRates).catch(() => undefined);
     if (code === "CNY") void setSetting("cost", cost).catch(() => undefined);
   },
+  setCountryOverrides(country, patch) {
+    const cur: Record<string, unknown> = { ...(get().countryOverrides[country] ?? {}) };
+    for (const [k, v] of Object.entries(patch)) {
+      if (v === null || v === undefined) delete cur[k];
+      else if (k === "commissions") cur[k] = { ...((cur[k] as Record<string, number> | undefined) ?? {}), ...(v as Record<string, number>) };
+      else cur[k] = v;
+    }
+    if (cur["commissions"]) {
+      // A `null` commission inside the patch removes that marketplace's override.
+      const c = Object.fromEntries(Object.entries(cur["commissions"] as Record<string, number | null>).filter(([, r]) => r !== null && r !== undefined)) as Record<string, number>;
+      if (Object.keys(c).length) cur["commissions"] = c;
+      else delete cur["commissions"];
+    }
+    const next = { ...get().countryOverrides };
+    const clean = sanitizeCountryOverrides(cur as CountryOverrides);
+    if (Object.keys(clean).length) next[country] = clean;
+    else delete next[country];
+    const prevCost = get().cost;
+    const cost = country === get().targetCountry && clean.shippingKey && clean.shippingKey !== prevCost.shippingKey ? { ...prevCost, shippingKey: shippingKeyFor(country, prevCost.shippingKey, clean.shippingKey) } : prevCost;
+    set({ countryOverrides: next, cost });
+    void setSetting("countryOverrides", next).catch(() => undefined);
+    if (cost !== prevCost) void setSetting("cost", cost).catch(() => undefined);
+  },
+  resetCountryOverrides(country) {
+    const next = { ...get().countryOverrides };
+    delete next[country];
+    set({ countryOverrides: next });
+    void setSetting("countryOverrides", next).catch(() => undefined);
+  },
   dismissOnboarding() {
     const at = new Date().toISOString();
     set({ onboardingDismissedAt: at });
     void setSetting("onboardingDismissedAt", at).catch(() => undefined);
   },
 }));
+
+/** Hook: the target country's profile with the user's cost overrides applied (reactive). */
+export function useCostProfile(): CountryProfile {
+  const country = useSettings((s) => s.targetCountry);
+  const overrides = useSettings((s) => s.countryOverrides);
+  return useMemo(() => effectiveProfile(country, overrides), [country, overrides]);
+}
 
 /** Rate the app displays for a currency: the user's override, else the dated table. */
 export function effectiveRate(code: string, rates: FxRates): number | undefined {

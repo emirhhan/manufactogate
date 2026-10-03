@@ -1,8 +1,11 @@
 import {
   AdapterError,
+  type AdapterProgress,
   type HealthResult,
   type ImageInput,
   type LinkInfo,
+  type ListingHint,
+  type ListingSupplierInfo,
   type MarketAdapter,
   type MarketId,
   type MarketMeta,
@@ -12,9 +15,11 @@ import {
   type RawSupplier,
   type SearchOptions,
   type SessionState,
+  type SoldPeriod,
 } from "@manufactogate/core";
 import { inlineScriptText, parseCount, visibleText, type CardData } from "../dom";
-import type { ExtractFailure, ExtractRequest, ExtractResult, PageExtractor, PageProbe, PageRunner } from "./runner";
+import { TIMING } from "./protocol";
+import type { ExtractFailure, ExtractRequest, ExtractResult, PageExtractor, PageProbe, PageRunner, RunnerOptions } from "./runner";
 
 /** What a market's page-side search extractor returns per item. Must be JSON-serializable. */
 export interface SearchItem extends CardData {
@@ -89,6 +94,10 @@ export interface RealMarketDef {
   /** Page for image search. `upload: false` means the URL already carries the image (no file injection). */
   imageSearchUrl?: (input: ImageInput) => { url: string; upload: boolean };
   detailUrl(id: string): string;
+  /** Seller-specific detail page for a hint (URL the listing was seen at, supplier id); null falls back to `detailUrl`. */
+  detailUrlFor?: (id: string, hint: ListingHint) => string | null;
+  /** What this market's `sold` counter measures (default: lifetime total). */
+  soldPeriod?: SoldPeriod;
   supplierUrl?: (id: string) => string;
   resolveLink(url: string): LinkInfo | null;
   /** Page-side routines, bundled into the extension. */
@@ -123,6 +132,76 @@ export function strategyOf(items: readonly { text?: string }[]): SearchStrategy 
   return items.every((i) => (i.text ?? "") === "") ? "embedded" : "cards";
 }
 
+/** Markets whose seller is selected by a query parameter on the detail URL (no dedicated def hook needed). */
+const SELLER_PARAM: Partial<Record<MarketId, string>> = { "tr-trendyol": "merchantId" };
+
+/** Known meaning of each wave-1 market's sold counter; other markets default to lifetime totals. */
+const SOLD_PERIOD: Partial<Record<MarketId, SoldPeriod>> = { "cn-1688": "30d", "cn-taobao": "total", "cn-pinduoduo": "total" };
+
+/**
+ * Detail URL for a listing and an optional hint. Order: the def's own hook, the canonical form of the
+ * URL the listing was seen at (keeps seller parameters, e.g. Trendyol merchantId), the seller id as a
+ * query parameter on markets that select the seller that way, else the plain detail URL.
+ */
+export function detailUrlFor(def: Pick<RealMarketDef, "id" | "detailUrl" | "detailUrlFor" | "resolveLink">, id: string, hint?: ListingHint): string {
+  if (hint) {
+    const own = def.detailUrlFor?.(id, hint);
+    if (own) return own;
+    if (hint.url) {
+      const info = def.resolveLink(hint.url);
+      if (info && info.listingId === id) return info.canonicalUrl;
+    }
+    const param = SELLER_PARAM[def.id];
+    if (hint.supplierId && param) {
+      const base = def.detailUrl(id);
+      try {
+        const u = new URL(base);
+        if (!u.searchParams.has(param)) u.searchParams.set(param, hint.supplierId);
+        return u.toString();
+      } catch {
+        return `${base}${base.includes("?") ? "&" : "?"}${param}=${encodeURIComponent(hint.supplierId)}`;
+      }
+    }
+  }
+  return def.detailUrl(id);
+}
+
+const num = (v: unknown): number | undefined => (typeof v === "number" && Number.isFinite(v) ? v : undefined);
+
+/**
+ * Copies every SearchItem/CardData field the market's `toListing` left out onto the listing:
+ * review counts, price ranges, price-on-request, title language, sold-counter meaning and the
+ * supplier signals a card shows (years, verified, business type, shop rating). Pure.
+ */
+export function enrichListing(def: Pick<RealMarketDef, "id" | "soldPeriod">, item: SearchItem, l: RawListing): RawListing {
+  const out: RawListing = { ...l };
+  const reviews = num(item.ratingCount);
+  if (out.reviewCount === undefined && reviews !== undefined) out.reviewCount = reviews;
+  if (out.priceMax === undefined) {
+    const max = num(item.priceMax);
+    const low = out.price.tiers[0]?.unitPrice;
+    if (max !== undefined && (low === undefined || max > low)) out.priceMax = max;
+  }
+  if (out.priceOnRequest === undefined && item.priceOnRequest === true) out.priceOnRequest = true;
+  if (out.titleLang === undefined && typeof item.titleLang === "string" && item.titleLang) out.titleLang = item.titleLang;
+  if (out.sold !== undefined && out.soldPeriod === undefined) {
+    // A market that reports review counts as "sold" (Trendyol: orderCount ?? ratingCount) is a review-based counter.
+    const fromReviews = reviews !== undefined && out.sold === reviews;
+    out.soldPeriod = fromReviews ? "reviews" : (def.soldPeriod ?? SOLD_PERIOD[def.id] ?? "total");
+  }
+  if (out.rating !== undefined && out.ratingMax === undefined && out.rating > 5) out.ratingMax = 100;
+  const supplier: ListingSupplierInfo = {};
+  const years = num(item.supplierYears);
+  if (years !== undefined && years > 0) supplier.years = years;
+  if (item.supplierVerified === true) supplier.verified = true;
+  if (item.businessType && item.businessType !== "unknown") supplier.businessType = item.businessType;
+  const srating = num(item.supplierRating);
+  if (srating !== undefined) supplier.rating = srating;
+  if (reviews !== undefined && srating !== undefined) supplier.ratingCount = reviews;
+  if (Object.keys(supplier).length) out.supplier = { ...(out.supplier ?? {}), ...supplier };
+  return out;
+}
+
 /** Builds the full search payload (items + page probe) from an extractor; the extension calls this per poll. */
 export function searchPayloadFor(ex: PageExtractor, doc: Document): SearchPayload {
   const session = ex.session(doc);
@@ -141,6 +220,22 @@ export function healthPayloadFor(ex: PageExtractor, doc: Document, withItems = t
 
 /** Below this share of new ids a page is treated as "the same page again" (wrong pagination parameter). */
 const MIN_NEW_SHARE = 0.3;
+
+/** Thrown after the caller aborted: the orchestrator reports the market as cancelled, never as an error. */
+function abortError(): Error {
+  const e = new Error("aborted");
+  e.name = "AbortError";
+  return e;
+}
+
+/** Runner options for a search page: the caller's signal plus progress stamped with the page number. */
+function runnerOptions(o: SearchOptions | undefined, page?: number): RunnerOptions {
+  const out: RunnerOptions = {};
+  if (o?.signal) out.signal = o.signal;
+  const cb = o?.onProgress;
+  if (cb) out.onProgress = page !== undefined && page > 1 ? (p: AdapterProgress) => cb({ ...p, page }) : cb;
+  return out;
+}
 
 /** Builds a MarketAdapter from a market definition and a PageRunner (the extension). */
 export function createRealAdapter(def: RealMarketDef, runner: PageRunner): MarketAdapter {
@@ -164,20 +259,23 @@ export function createRealAdapter(def: RealMarketDef, runner: PageRunner): Marke
       seen.add(item.id);
       fresh++;
       const l = def.toListing(item, fetchedAt);
-      if (l) listings.push(l);
+      if (l) listings.push(enrichListing(def, item, l));
     }
     return { listings, got: r.data.items.length, fresh, noResults: r.data.noResults === true, total: typeof r.data.total === "number" ? r.data.total : null };
   }
 
-  async function runSearch(req: ExtractRequest): Promise<ExtractResult<SearchPayload>> {
-    const r = await runner.run<SearchPayload>(req);
-    if (!r.ok) fail(def, r);
+  async function runSearch(req: ExtractRequest, ro: RunnerOptions): Promise<ExtractResult<SearchPayload>> {
+    const r = await runner.run<SearchPayload>(req, ro);
+    if (!r.ok) {
+      if (ro.signal?.aborted) throw abortError();
+      fail(def, r);
+    }
     assertSession(def, r.data.session, r.finalUrl);
     return r;
   }
 
   /** Opens page `page` of a text query; the human path (typed query) falls back to the search URL. */
-  async function searchTextPage(query: string, page: number, want: number): Promise<ExtractResult<SearchPayload>> {
+  async function searchTextPage(query: string, page: number, want: number, ro: RunnerOptions): Promise<ExtractResult<SearchPayload>> {
     const urlReq: ExtractRequest = { market: def.id, kind: "search", url: def.searchUrl(query, page), want, ...(def.resultsUrlPattern ? { expectUrl: def.resultsUrlPattern.source } : {}) };
     if (page === 1 && def.humanSearchHome) {
       const humanReq: ExtractRequest = {
@@ -186,18 +284,19 @@ export function createRealAdapter(def: RealMarketDef, runner: PageRunner): Marke
         typeQuery: query,
         ...(def.searchBoxSelectors ? { searchBox: def.searchBoxSelectors } : {}),
       };
-      const r = await runner.run<SearchPayload>(humanReq);
+      const r = await runner.run<SearchPayload>(humanReq, ro);
       if (!r.ok) {
+        if (ro.signal?.aborted) throw abortError();
         // The search box was not found (late-mounted, renamed, login wall): the search URL still works.
-        if (r.error === "SelectorBroken" && /arama kutusu/i.test(r.message)) return runSearch(urlReq);
+        if (r.error === "SelectorBroken" && /arama kutusu/i.test(r.message)) return runSearch(urlReq, ro);
         fail(def, r);
       }
       assertSession(def, r.data.session, r.finalUrl);
       // Typed query did not navigate: the home page's promo cards are not results.
-      if (isResultsUrl(def, r.finalUrl) === false) return runSearch(urlReq);
+      if (isResultsUrl(def, r.finalUrl) === false) return runSearch(urlReq, ro);
       return r;
     }
-    const r = await runSearch(urlReq);
+    const r = await runSearch(urlReq, ro);
     if (isResultsUrl(def, r.finalUrl) === false) {
       throw new AdapterError("Network", def.id, `arama sayfasına yönlendirmedi: ${r.finalUrl}`);
     }
@@ -207,7 +306,7 @@ export function createRealAdapter(def: RealMarketDef, runner: PageRunner): Marke
   async function* search(url: string, imageDataUrl: string | undefined, o?: SearchOptions): AsyncIterable<RawListing> {
     const max = o?.maxResults ?? 30;
     const seen = new Set<string>();
-    const r = await runSearch({ market: def.id, kind: "search", url, want: Math.min(max, 60), ...(imageDataUrl ? { imageDataUrl } : {}) });
+    const r = await runSearch({ market: def.id, kind: "search", url, want: Math.min(max, 60), ...(imageDataUrl ? { imageDataUrl } : {}) }, runnerOptions(o));
     const page = readItems(r, seen, o);
     let n = 0;
     for (const l of page.listings) {
@@ -222,8 +321,8 @@ export function createRealAdapter(def: RealMarketDef, runner: PageRunner): Marke
     const seen = new Set<string>();
     let n = 0;
     for (let page = 1; page <= pages && n < max; page++) {
-      if (o?.signal?.aborted) return;
-      const r = await searchTextPage(query, page, Math.min(max - n, 60));
+      if (o?.signal?.aborted) throw abortError();
+      const r = await searchTextPage(query, page, Math.min(max - n, 60), runnerOptions(o, page));
       if (r.data.items.length === 0 && r.data.blocked) throw new AdapterError("RateLimited", def.id, r.data.blocked);
       const read = readItems(r, seen, o);
       for (const l of read.listings) {
@@ -244,7 +343,7 @@ export function createRealAdapter(def: RealMarketDef, runner: PageRunner): Marke
 
     async session(): Promise<SessionState> {
       const url = def.homeUrl ?? def.humanSearchHome ?? def.searchUrl(def.healthQuery);
-      const r = await runner.run<{ session: SessionState }>({ market: def.id, kind: "health", url, timeoutMs: 8000, quick: true });
+      const r = await runner.run<{ session: SessionState }>({ market: def.id, kind: "health", url, timeoutMs: TIMING.quickProbeMs, quick: true });
       return r.ok ? r.data.session : "unknown";
     },
 
@@ -259,12 +358,15 @@ export function createRealAdapter(def: RealMarketDef, runner: PageRunner): Marke
       return searchText(query, o);
     },
 
-    async fetchListing(id: string): Promise<RawListingDetail> {
-      const r = await runner.run<DetailPayload>({ market: def.id, kind: "detail", url: def.detailUrl(id) });
+    async fetchListing(id: string, hint?: ListingHint): Promise<RawListingDetail> {
+      const url = detailUrlFor(def, id, hint);
+      const r = await runner.run<DetailPayload>({ market: def.id, kind: "detail", url });
       if (!r.ok) fail(def, r);
       assertSession(def, r.data.session, r.finalUrl);
       const d = r.data.detail && def.toDetail(r.data.detail, id, now());
       if (!d) throw new AdapterError("SelectorBroken", def.id, `detail not parsed on ${r.finalUrl}`);
+      // A seller-specific page was asked for: keep that URL unless the page itself named the seller.
+      if (url !== def.detailUrl(id) && d.url === def.detailUrl(id)) d.url = url;
       return d;
     },
 
@@ -283,7 +385,7 @@ export function createRealAdapter(def: RealMarketDef, runner: PageRunner): Marke
       const t0 = Date.now();
       try {
         const url = def.searchUrl(def.healthQuery);
-        const r = await runner.run<HealthPayload>({ market: def.id, kind: "health", url, want: 5, timeoutMs: 8000, quick: true, ...(def.resultsUrlPattern ? { expectUrl: def.resultsUrlPattern.source } : {}) });
+        const r = await runner.run<HealthPayload>({ market: def.id, kind: "health", url, want: 5, timeoutMs: TIMING.quickProbeMs, quick: true, ...(def.resultsUrlPattern ? { expectUrl: def.resultsUrlPattern.source } : {}) });
         if (!r.ok) return { ok: false, checkedAt: now(), durationMs: Date.now() - t0, message: `${r.error}: ${r.message}` };
         const d = r.data;
         const resultsPage = d.resultsPage ?? isResultsUrl(def, r.finalUrl);

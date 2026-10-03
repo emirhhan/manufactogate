@@ -308,6 +308,70 @@ function bindSettings() {
   notif.addEventListener("change", () => void save({ notifications: notif.checked }));
   overlay.addEventListener("change", () => void save({ overlay: overlay.checked }));
   origin.addEventListener("change", () => void save({ appOrigin: origin.value.trim() }));
+  bindMarketSettings(save);
+}
+
+/** Per-market rate limit (settings.rateLimit[market]) and per-site overlay switch (settings.overlaySites[host]). */
+function bindMarketSettings(save: (patch: Partial<Settings>) => Promise<void>) {
+  const sel = $<HTMLSelectElement>("rlMarket");
+  const interval = $<HTMLInputElement>("rlInterval");
+  const perHour = $<HTMLInputElement>("rlPerHour");
+  const overlaySite = $<HTMLInputElement>("overlaySite");
+  const hint = $("rlDefault");
+  for (const d of DEFS) {
+    const o = document.createElement("option");
+    o.value = d.id;
+    o.textContent = `${d.meta.name} (${d.meta.country.toUpperCase()})`;
+    sel.appendChild(o);
+  }
+  const current = () => (sel.value || DEFS[0]?.id) as MarketId;
+  const hostOf = (id: MarketId) => marketHost(id, BY_ID[id]?.meta.hosts ?? []);
+  const fill = () => {
+    const id = current();
+    const def = BY_ID[id];
+    const rl = view.settings.rateLimit[id] ?? {};
+    const base = def?.meta.rateLimit ?? { minIntervalMs: 0, maxPerHour: 0 };
+    interval.value = rl.minIntervalMs !== undefined ? String(Math.round(rl.minIntervalMs / 1000)) : "";
+    interval.placeholder = String(Math.round(base.minIntervalMs / 1000));
+    perHour.value = rl.maxPerHour !== undefined ? String(rl.maxPerHour) : "";
+    perHour.placeholder = String(base.maxPerHour);
+    overlaySite.checked = view.settings.overlaySites[hostOf(id)] !== false;
+    hint.textContent = `Varsayılan: ${Math.round(base.minIntervalMs / 1000)} sn aralık, saatte ${base.maxPerHour} istek (tempo ×${view.settings.tempo} ayrıca uygulanır)`;
+  };
+  const saveRate = async () => {
+    const id = current();
+    const entry: { minIntervalMs?: number; maxPerHour?: number } = {};
+    const sec = Number(interval.value);
+    const hour = Number(perHour.value);
+    if (interval.value.trim() !== "" && Number.isFinite(sec) && sec >= 0) entry.minIntervalMs = Math.round(sec * 1000);
+    if (perHour.value.trim() !== "" && Number.isFinite(hour) && hour >= 1) entry.maxPerHour = Math.round(hour);
+    const rateLimit = { ...view.settings.rateLimit };
+    if (Object.keys(entry).length) rateLimit[id] = entry;
+    else delete rateLimit[id];
+    await save({ rateLimit });
+    fill();
+  };
+  sel.addEventListener("change", fill);
+  interval.addEventListener("change", () => void saveRate());
+  perHour.addEventListener("change", () => void saveRate());
+  overlaySite.addEventListener("change", async () => {
+    const host = hostOf(current());
+    const overlaySites = { ...view.settings.overlaySites };
+    if (overlaySite.checked) delete overlaySites[host];
+    else overlaySites[host] = false;
+    await save({ overlaySites });
+    fill();
+  });
+  $("rlReset").addEventListener("click", async () => {
+    const id = current();
+    const rateLimit = { ...view.settings.rateLimit };
+    delete rateLimit[id];
+    const overlaySites = { ...view.settings.overlaySites };
+    delete overlaySites[hostOf(id)];
+    await save({ rateLimit, overlaySites });
+    fill();
+  });
+  fill();
 }
 
 void load();

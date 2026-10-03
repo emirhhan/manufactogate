@@ -1,14 +1,18 @@
-import { PORT_NAME, REAL_DEF_BY_ID, type ExtractRequest, type ExtToWeb, type WebToExt } from "@manufactogate/adapters";
+import { PORT_NAME, REAL_DEF_BY_ID, type ExtEvent, type ExtToWeb, type RunProgress, type WebToExt } from "@manufactogate/adapters";
 import type { HealthResult, MarketId, SessionState } from "@manufactogate/core";
-import { extVersion, hostMatches, loadSettings, MARKET_HOSTS, type AnyReply, type AnyRequest, type HealthMap, type RunStage } from "../shared";
+import { APP_ORIGIN_PATTERNS, extVersion, hostMatches, loadSettings, MARKET_HOSTS, type AnyReply, type AnyRequest, type HealthMap, type RunStage } from "../shared";
 import { TR } from "./errors";
+import { healthRequestFor, healthResultFrom } from "./health";
 import * as runner from "./runner";
+import { mergeSnapshot, type SnapshotStore } from "./snapshots";
 
 /**
  * Background worker: answers popup, overlay and web-app requests.
  * - sessions: quick cookie heuristic per market (no tabs)
  * - health:   opens each market's search page the way a real search does and parses it
- * - run:      runs one ExtractRequest in a background tab (cancelled when the asking page goes away)
+ * - run:      runs one ExtractRequest in a background tab (cancelled when the asking page goes away or sends cancel)
+ * - cancel:   stops one request (by its envelope id) or every request of the connection
+ * - snapshot: stores a price snapshot for the overlay (chrome.storage.local.snapshots)
  * - image:    fetches a market image with the extension's host permissions
  * - capture:  returns the active tab's HTML for fixture calibration
  * - status/retry/closeTabs/openLogins/focusTab: popup controls over the runner
@@ -70,49 +74,29 @@ async function writeHealth(market: MarketId, h: HealthResult): Promise<void> {
   await chrome.storage.local.set({ health: { ...stored, [market]: h } }).catch(() => undefined);
 }
 
-/** Mirrors the real search path (typed query on the home page when the adapter uses it), so "healthy" means "a search works". */
-async function healthFor(market: MarketId, owner?: string): Promise<HealthResult> {
+/**
+ * Mirrors the real search path (typed query on the home page when the adapter uses it), so "healthy"
+ * means "a search works". `quick` is the 8 s probe the web's health round uses: search URL, first
+ * reading, no captcha wait, no scrolling.
+ */
+async function healthFor(market: MarketId, owner?: string, quick = false): Promise<HealthResult> {
   const def = REAL_DEF_BY_ID[market];
   const t0 = Date.now();
   if (!def) return { ok: false, checkedAt: new Date().toISOString(), message: TR.noAdapter };
-  const base: ExtractRequest = {
-    market,
-    kind: "search",
-    url: def.searchUrl(def.healthQuery),
-    want: 5,
-    timeoutMs: 15000,
-    ...(def.resultsUrlPattern ? { expectUrl: def.resultsUrlPattern.source } : {}),
-  };
-  const req: ExtractRequest = def.humanSearchHome
-    ? { ...base, url: def.humanSearchHome, typeQuery: def.healthQuery, ...(def.searchBoxSelectors ? { searchBox: def.searchBoxSelectors } : {}) }
-    : base;
+  const req = healthRequestFor(def, quick);
   const r = await runner.runTracked(req, { waitForCaptcha: false, ...(owner ? { owner } : {}) });
-  const checkedAt = new Date().toISOString();
-  const durationMs = Date.now() - t0;
-  if (!r.ok) return { ok: false, checkedAt, durationMs, message: r.message };
-  const d = r.data as { session: SessionState; items?: unknown[]; strategy?: string; noResults?: boolean; total?: number; resultsPage?: boolean | null; note?: string };
-  const n = d.items?.length ?? 0;
-  const sessionOk = d.session !== "captcha" && d.session !== "logged-out";
-  const resultsPage = d.resultsPage ?? (def.resultsUrlPattern ? def.resultsUrlPattern.test(r.finalUrl) : null);
-  const parts: string[] = [d.session === "logged-in" ? "giriş var" : d.session === "logged-out" ? "giriş yok" : d.session === "captcha" ? "doğrulama" : "oturum bilinmiyor"];
-  if (resultsPage === false) parts.push("sonuç sayfası açılmadı");
-  else parts.push(`${n} sonuç`, `strateji ${d.strategy ?? "none"}`);
-  if (d.noResults) parts.push("pazar: sonuç yok");
-  if (typeof d.total === "number") parts.push(`toplam ${d.total}`);
-  if (d.note) parts.push(d.note);
-  const ok = sessionOk && resultsPage !== false && (n > 0 || d.noResults === true);
-  return { ok, checkedAt, durationMs, message: parts.join(" · ") };
+  return healthResultFrom(def, r, Date.now() - t0);
 }
 
 /** Runs a health round once even when several callers ask at the same time; results are stored per market as they arrive. */
-function healthRound(markets: MarketId[], key: string, owner?: string): Promise<HealthMap> {
+function healthRound(markets: MarketId[], key: string, owner?: string, quick = false): Promise<HealthMap> {
   const existing = healthRuns.get(key);
   if (existing) return existing;
   const p = (async () => {
     const out: HealthMap = {};
     for (const m of markets) {
       try {
-        out[m] = await healthFor(m, owner);
+        out[m] = await healthFor(m, owner, quick);
       } catch (e) {
         out[m] = { ok: false, checkedAt: new Date().toISOString(), message: e instanceof Error ? e.message : String(e) };
       }
@@ -130,8 +114,16 @@ function healthRound(markets: MarketId[], key: string, owner?: string): Promise<
 
 interface HandleCtx {
   owner?: string;
+  /** Envelope id of the request (web connections), so a later `cancel` can name it. */
+  requestId?: string;
   progress?: (market: MarketId, stage: RunStage) => void;
   senderTabId?: number;
+}
+
+async function storeSnapshot(snapshot: Parameters<typeof mergeSnapshot>[1]): Promise<void> {
+  const { snapshots } = await chrome.storage.local.get("snapshots").catch(() => ({ snapshots: undefined }));
+  const next = mergeSnapshot((snapshots as SnapshotStore | undefined) ?? {}, snapshot);
+  await chrome.storage.local.set({ snapshots: next }).catch(() => undefined);
 }
 
 async function handle(msg: AnyRequest, ctx: HandleCtx = {}): Promise<AnyReply> {
@@ -142,17 +134,22 @@ async function handle(msg: AnyRequest, ctx: HandleCtx = {}): Promise<AnyReply> {
       return { type: "sessions", sessions: await allSessions() };
     case "health": {
       const markets = msg.market ? [msg.market] : (Object.keys(REAL_DEF_BY_ID) as MarketId[]).filter((m) => !REAL_DEF_BY_ID[m]?.meta.version.includes("beta"));
-      const health = await healthRound(markets, msg.market ?? "*", ctx.owner);
+      const quick = msg.quick === true;
+      const health = await healthRound(markets, `${msg.market ?? "*"}${quick ? ":quick" : ""}`, ctx.owner, quick);
       return { type: "health", health };
     }
     case "run": {
       const progress = ctx.progress;
       const result = await runner.runTracked(msg.req, {
         ...(ctx.owner ? { owner: ctx.owner } : {}),
+        ...(ctx.requestId ? { requestId: ctx.requestId } : {}),
         ...(progress ? { progress: (stage: RunStage) => progress(msg.req.market, stage) } : {}),
       });
       return { type: "run:result", result };
     }
+    case "snapshot":
+      await storeSnapshot(msg.snapshot);
+      return { type: "ok" };
     case "image":
       return { type: "image:result", dataUrl: await runner.fetchImageAsDataUrl(msg.url) };
     case "capture": {
@@ -162,8 +159,10 @@ async function handle(msg: AnyRequest, ctx: HandleCtx = {}): Promise<AnyReply> {
     case "status":
       return { type: "status", status: runner.runnerStatus() };
     case "cancel":
-      // Explicit cancel from the asking connection (the disconnect path covers closed pages).
-      if (ctx.owner) runner.cancelOwner(ctx.owner);
+      // Explicit cancel from the asking connection: one request by id, or all of its requests.
+      // The disconnect path covers closed pages; a popup (no owner) cancels everything.
+      if (ctx.owner && msg.id) runner.cancelRequest(ctx.owner, msg.id);
+      else if (ctx.owner) runner.cancelOwner(ctx.owner);
       else runner.cancelAll();
       return { type: "ok" };
     case "retry": {
@@ -214,8 +213,8 @@ function safePost(port: chrome.runtime.Port, payload: unknown): void {
   }
 }
 
-/** Unsolicited events for every connected page (sent under `event`, which the request/reply bridge ignores). */
-function broadcast(event: { type: string; [k: string]: unknown }): void {
+/** Unsolicited events for every connected page (sent under `event`, never as a reply). */
+function broadcast(event: ExtEvent): void {
   for (const port of ports.keys()) safePost(port, { event });
 }
 
@@ -231,8 +230,8 @@ chrome.runtime.onConnect.addListener((port) => {
       safePost(port, { id: msg.id, payload: { type: "error", message: TR.versionMismatch } satisfies ExtToWeb });
       return;
     }
-    const progress = (market: MarketId, stage: RunStage) => safePost(port, { id: msg.id, progress: { type: "run:progress", market, stage } });
-    handle(msg.payload, { owner, progress })
+    const progress = (market: MarketId, stage: RunStage) => safePost(port, { id: msg.id, progress: { type: "run:progress", market, stage } satisfies RunProgress });
+    handle(msg.payload, { owner, requestId: msg.id, progress })
       .then((payload) => safePost(port, { id: msg.id, payload }))
       .catch((e: unknown) => safePost(port, { id: msg.id, payload: { type: "error", message: e instanceof Error ? e.message : String(e) } satisfies ExtToWeb }));
   });
@@ -257,7 +256,7 @@ chrome.runtime.onMessage.addListener((msg: AnyRequest, sender, sendResponse: (r:
 /** After an update the old content script is orphaned; inject the new one into open app tabs so the page recovers. */
 async function reinjectContentScript(): Promise<void> {
   const settings = await loadSettings();
-  const patterns = new Set<string>(["http://localhost:5173/*", "http://127.0.0.1:5173/*", `${settings.appOrigin}/*`]);
+  const patterns = new Set<string>([...APP_ORIGIN_PATTERNS, `${settings.appOrigin}/*`]);
   const tabs = await chrome.tabs.query({ url: [...patterns] }).catch(() => []);
   for (const t of tabs) {
     if (t.id === undefined) continue;

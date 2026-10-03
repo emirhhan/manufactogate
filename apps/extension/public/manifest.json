@@ -37,6 +37,8 @@
     "*://*.trendyol.com/*",
     "http://localhost:5173/*",
     "http://127.0.0.1:5173/*",
+    "http://127.0.0.1:4173/*",
+    "http://localhost:4173/*",
     "*://*.alibaba.com/*",
     "*://*.aliexpress.com/*",
     "*://*.aliexpress.us/*",
@@ -71,7 +73,9 @@
     {
       "matches": [
         "http://localhost:5173/*",
-        "http://127.0.0.1:5173/*"
+        "http://127.0.0.1:5173/*",
+        "http://localhost:4173/*",
+        "http://127.0.0.1:4173/*"
       ],
       "js": [
         "content.js"

@@ -6,7 +6,7 @@ import { COPY } from "@/lib/copy";
 import { money, pct } from "@/lib/format";
 import { convert, getDisplayCurrency, minOf } from "@/lib/fx";
 import { getRegistry } from "@/lib/registry";
-import { useSettings } from "@/store/settings";
+import { effectiveProfile, useSettings } from "@/store/settings";
 import { Card, cn } from "./ui";
 
 const MODES = [
@@ -23,6 +23,7 @@ const MODES = [
  */
 export function CountryCompare({ tiers, currency, weightKg, moq, found, hsCode }: { tiers: PriceTier[]; currency: string; weightKg: number; moq?: number | undefined; found: Record<string, RawListing | undefined>; hsCode?: string | undefined }) {
   const cost = useSettings((s) => s.cost);
+  const overrides = useSettings((s) => s.countryOverrides);
   const [sell, setSell] = useState<Record<string, string>>({});
   const [qtyText, setQtyText] = useState("");
   const [mode, setMode] = useState<string>(cost.shippingKey);
@@ -31,7 +32,8 @@ export function CountryCompare({ tiers, currency, weightKg, moq, found, hsCode }
   const qty = pickQty(tiers, moq, Number(qtyText) || null);
 
   const rows = useMemo(() => {
-    return Object.values(COUNTRY_PROFILES).map((p) => {
+    // Every country runs with the user's own figures when they edited that country in Settings.
+    return Object.keys(COUNTRY_PROFILES).map((c) => effectiveProfile(c, overrides)).map((p) => {
       const fx = rateFor(currency, p.currency, cost.fxCnyTry);
       const shippingKey = shippingKeyFor(p, mode);
       const ship = p.shipping.find((s) => s.key === shippingKey)!;
@@ -56,9 +58,9 @@ export function CountryCompare({ tiers, currency, weightKg, moq, found, hsCode }
       const marketplaceId = marketplaceFor(p, foundBest?.market);
       const margin = sellPrice ? computeMargin(p, landed.perUnit, { sellPrice, marketplaceId, overheadRate: cost.overheadRate }) : null;
       const source = typed > 0 ? "girilen" : foundBest ? (reg.get(foundBest.market as never)?.meta.name ?? "bulunan") : null;
-      return { p, qty, fx, landed, sellPrice, margin, source, shippingKey, ship, marketplaceId, deMinimis };
+      return { p, qty, fx, landed, sellPrice, margin, source, shippingKey, ship, marketplaceId, deMinimis, edited: p.sources.includes("user") };
     });
-  }, [tiers, currency, weightKg, found, cost, sell, reg, qty, mode, hsCode]);
+  }, [tiers, currency, weightKg, found, cost, sell, reg, qty, mode, hsCode, overrides]);
 
   const best = rows.filter((r) => r.margin).sort((a, b) => (b.margin?.marginRate ?? -1) - (a.margin?.marginRate ?? -1))[0];
 
@@ -117,6 +119,7 @@ export function CountryCompare({ tiers, currency, weightKg, moq, found, hsCode }
                     {COUNTRY_NAMES_TR[r.p.country] ?? r.p.country.toUpperCase()}
                     <span className="ml-1 text-[11px] font-normal text-muted">{r.qty} adet · {r.ship.label}</span>
                     {r.deMinimis && <span className="ml-1 text-[11px] font-normal text-success" title="Sevkiyat değeri de minimis eşiğinin altında: vergi uygulanmadı">· de minimis altı</span>}
+                    {r.edited && <span className="ml-1 text-[11px] font-normal text-accent" title="Bu ülkenin oranlarını Ayarlar'da düzenledin">· senin oranların</span>}
                   </td>
                   {r.landed ? (
                     <>
@@ -135,7 +138,7 @@ export function CountryCompare({ tiers, currency, weightKg, moq, found, hsCode }
                       </td>
                       <td className="py-2 text-[12px] text-muted">{r.source ?? "fiyat gir"}</td>
                       <td className={cn("py-2 pr-4 text-right tnum", r.margin ? (r.margin.netPerUnit > 0 ? "text-success" : "text-danger") : "text-muted")}>
-                        {r.margin ? `${money(r.margin.netPerUnit, r.p.currency)} (${pct(r.margin.marginRate)})` : "—"}
+                        {r.margin ? <span title={`KDV %${Math.round((r.p.salesVatRate ?? 0) * 100)} ve komisyon %${Math.round(r.margin.commissionRate * 100)} sonrası`}>{money(r.margin.netPerUnit, r.p.currency)} ({pct(r.margin.marginRate)})</span> : "—"}
                       </td>
                     </>
                   ) : (

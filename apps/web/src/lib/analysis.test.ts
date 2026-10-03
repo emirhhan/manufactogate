@@ -1,8 +1,10 @@
 import { beforeAll, describe, expect, it } from "vitest";
 import type { RawListing } from "@manufactogate/core";
 import { getCountryProfile } from "@manufactogate/country-profiles";
-import { analyzeResults, bestByRole, buildChain, histogram, hsSuggest, median, pickQty, quantile, rankManufacturers, rateFor, scenario, sellersOf, supplierRisk, supplierScore } from "./analysis";
+import { analyzeResults, bestByRole, buildChain, costProfileFor, histogram, HS_OPTIONS, hsSuggest, median, pickQty, quantile, rankManufacturers, rateFor, scenario, sellersOf, supplierRisk, supplierScore, traceContextOf } from "./analysis";
+import { FX_TO_TRY } from "./fx";
 import { setDataSource } from "./registry";
+import { useSettings } from "@/store/settings";
 
 beforeAll(() => setDataSource("mock"));
 
@@ -26,10 +28,12 @@ describe("analysis helpers", () => {
     expect(quantile([10, 20, 30, 40], 0.25)).toBe(20);
     expect(quantile([5], 0.9)).toBe(5);
   });
-  it("hs suggestion by group", () => {
+  it("hs suggestion by group comes from the core table", () => {
     expect(hsSuggest("motorcycle")?.hs).toBe("6506");
+    expect(hsSuggest("furniture")?.hs).toBe("9403");
     expect(hsSuggest("nope")).toBeNull();
     expect(hsSuggest(undefined)).toBeNull();
+    expect(HS_OPTIONS.find((o) => o.group === "electronics")?.hs).toBe("8517");
   });
   it("pickQty: user, second tier, max(moq,100)", () => {
     const tiers = [{ minQty: 1, unitPrice: 10 }, { minQty: 50, unitPrice: 9 }, { minQty: 500, unitPrice: 8 }];
@@ -40,8 +44,8 @@ describe("analysis helpers", () => {
   });
   it("rateFor prefers the user's CNY rate", () => {
     expect(rateFor("CNY", "TRY", 5)).toBe(5);
-    expect(rateFor("CNY", "USD", 5)).toBeCloseTo(5 / 34, 6);
-    expect(rateFor("USD", "TRY", 5)).toBe(34);
+    expect(rateFor("CNY", "USD", 5)).toBeCloseTo(5 / FX_TO_TRY.USD!, 6);
+    expect(rateFor("USD", "TRY", 5)).toBeCloseTo(FX_TO_TRY.USD!, 9);
     expect(rateFor("XYZ", "TRY", 5)).toBeNull();
     expect(rateFor("TRY", "TRY", 5)).toBe(1);
   });
@@ -87,6 +91,32 @@ describe("analyzeResults", () => {
     expect(a.score).toBe(Math.round(a.sub.margin + a.sub.demand + a.sub.availability + a.sub.competition));
     expect(a.sub.competition).toBe(8);
     expect(a.chain?.map((s) => s.key)).toEqual(["source", "landed", "sell", "net"]);
+  });
+  it("margin at median is VAT-aware and reports commission, VAT and marketplace", () => {
+    const a = analyzeResults([...source, ...target], OPTS);
+    expect(a.marginAtMedian).not.toBeNull();
+    expect(a.marginAtMedian!.marketplaceId).toBe("tr-trendyol");
+    expect(a.marginAtMedian!.vatRate).toBeGreaterThan(0);
+    expect(a.marginAtMedian!.commissionRate).toBeGreaterThan(0);
+    // Consumer price includes VAT: the net at the median is below median − landed − commission on the gross.
+    const naive = 450 - a.landedPerUnit! - 450 * a.marginAtMedian!.commissionRate - 450 * OPTS.overheadRate;
+    expect(a.marginAtMedian!.net).toBeLessThan(naive);
+  });
+  it("uses the user's country overrides (KDV, commissions) unless a profile is given", () => {
+    const base = analyzeResults([...source, ...target], OPTS);
+    useSettings.setState({ countryOverrides: { tr: { vatRate: 0.01, commissions: { "tr-trendyol": 0.01 } } } });
+    try {
+      const over = analyzeResults([...source, ...target], OPTS);
+      expect(over.marginAtMedian!.commissionRate).toBe(0.01);
+      expect(over.marginAtMedian!.vatRate).toBe(0.01);
+      expect(over.marginAtMedian!.net).toBeGreaterThan(base.marginAtMedian!.net);
+      expect(costProfileFor("tr").sources).toContain("user");
+      const explicit = analyzeResults([...source, ...target], { ...OPTS, profile: getCountryProfile("tr")! });
+      expect(explicit.marginAtMedian!.commissionRate).toBe(base.marginAtMedian!.commissionRate);
+    } finally {
+      useSettings.setState({ countryOverrides: {} });
+    }
+    expect(costProfileFor("tr")).toBe(getCountryProfile("tr"));
   });
   it("bestByRole respects relevance and currency", () => {
     const all = [...source, ...target, L({ market: "cn-1688", id: "zz", price: 1, currency: "XYZ" })];
@@ -150,6 +180,38 @@ describe("supplier intelligence", () => {
     const withFactory = supplierScore(l, { market: "cn-1688", id: "s", url: "", name: "x", badges: [], businessType: "factory", yearsOnPlatform: 8, repeatPurchaseRate: 0.4 }).factory;
     expect(withFactory).toBeGreaterThan(base);
     expect(supplierScore(L({ market: "cn-1688", id: "t", price: 10, currency: "CNY", supplierName: "义乌商贸" })).factory).toBeLessThan(base);
+  });
+  it("supplierScore reads card-level supplier signals (years, verified, business type) through the core trace scorer", () => {
+    const base = L({ market: "cn-alibaba", id: "a", price: [10, 9, 8], currency: "USD", supplierName: "Shenzhen Co" });
+    const plain = supplierScore(base);
+    const factory = supplierScore({ ...base, supplier: { years: 8, verified: true, businessType: "factory" } });
+    const trader = supplierScore({ ...base, supplier: { businessType: "trading" } });
+    expect(factory.factory).toBeGreaterThan(plain.factory);
+    expect(trader.factory).toBeLessThan(plain.factory);
+    expect(factory.reasons).toContain("işletme türü: üretici");
+    expect(factory.reasons).toContain("doğrulanmış satıcı");
+    expect(factory.reasons).toContain("5+ yıl platformda");
+    // The fetched profile wins over the card, the card fills the gaps.
+    const merged = supplierScore({ ...base, supplier: { years: 8 } }, { market: "cn-alibaba", id: "s", url: "", name: "x", badges: [], businessType: "trading" });
+    expect(merged.reasons).toContain("işletme türü: ticaret");
+    expect(merged.reasons).toContain("5+ yıl platformda");
+  });
+  it("traceContextOf gives min/median per currency and the cheapest peer gets the price reason", () => {
+    const peers = [12, 10, 15, 11].map((p, i) => L({ market: "cn-1688", id: `p${i}`, price: p, currency: "CNY" }));
+    const ctx = traceContextOf(peers, "CNY");
+    expect(ctx.clusterMinPrice).toBe(10);
+    expect(ctx.clusterMedianPrice).toBe(11.5);
+    expect(traceContextOf(peers, "USD")).toEqual({});
+    const cheapest = supplierScore(peers[1]!, null, ctx);
+    expect(cheapest.reasons).toContain("kümedeki en düşük fiyat bandında");
+  });
+  it("supplierRisk uses card-level years, verified and shop rating", () => {
+    const l = L({ market: "cn-alibaba", id: "me", price: 2, currency: "USD", supplier: { years: 1, verified: true, rating: 3.1, businessType: "trading" } });
+    const texts = supplierRisk(l, null).map((f) => f.text);
+    expect(texts).toContain("Yeni mağaza (1 yıl)");
+    expect(texts).not.toContain("Doğrulama etiketi yok");
+    expect(texts.some((t) => t.startsWith("Düşük mağaza puanı"))).toBe(true);
+    expect(texts).toContain("Ticaret firması (üretici değil)");
   });
   it("supplierRisk flags new stores, missing badges and inconsistent prices", () => {
     const peers = [10, 11, 12, 13, 9].map((p, i) => L({ market: "cn-1688", id: `p${i}`, price: p, currency: "CNY" }));

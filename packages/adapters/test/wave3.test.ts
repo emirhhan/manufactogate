@@ -50,7 +50,7 @@ describe("market definitions are consistent", () => {
     expect(y.homeUrl).toBe("https://auctions.yahoo.co.jp/");
     expect(y.meta.hosts).toContain("auctions.yahoo.co.jp");
     expect(y.resolveLink("https://auctions.yahoo.co.jp/jp/auction/g1246860963")?.listingId).toBe("g1246860963");
-    const m = D("jp-mercari");
+    const m = D("us-mercari");
     expect(m.meta.currency).toBe("USD");
     expect(m.meta.country).toBe("us");
     expect(m.resolveLink("https://www.mercari.com/us/item/m29966601812/")?.listingId).toBe("m29966601812");
@@ -73,7 +73,7 @@ describe("market definitions are consistent", () => {
 
 describe("home pages are not captcha walls (reCAPTCHA badges, CSP metas)", () => {
   it.each([
-    ["jp-mercari", "real-home", "https://www.mercari.com/"],
+    ["us-mercari", "real-home", "https://www.mercari.com/"],
     ["ae-noon", "real-home", "https://www.noon.com/uae-en/"],
     ["us-walmart", "real-home", "https://www.walmart.com/"],
   ] as const)("%s", (market, name, url) => {
@@ -211,7 +211,7 @@ describe("home-page captures (promo cards) parse with correct prices and titles"
     expect(it.priceCurrency).toBe("AED");
   });
   it("Mercari US: USD prices, titles from the thumb alt/title", () => {
-    const xs = items("jp-mercari", "real-home", "https://www.mercari.com/");
+    const xs = items("us-mercari", "real-home", "https://www.mercari.com/");
     expect(xs).toHaveLength(3);
     const it = by(xs, "m29966601812");
     expect(it.price).toBe(120);

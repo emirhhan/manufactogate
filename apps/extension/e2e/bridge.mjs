@@ -60,6 +60,23 @@ const askOn = (p, payload, timeout = 60000) =>
     { payload, timeout },
   );
 const ask = (payload, timeout) => askOn(page, payload, timeout);
+/** Like askOn, but with a caller-chosen envelope id so the request can be cancelled by id. */
+const askWithId = (p, id, payload, timeout = 60000) =>
+  p.evaluate(
+    ({ id, payload, timeout }) =>
+      new Promise((resolve, reject) => {
+        const t = setTimeout(() => reject(new Error("timeout")), timeout);
+        window.addEventListener("message", function h(ev) {
+          const d = ev.data;
+          if (!d || d.source !== "manufactogate-ext" || d.replyTo !== id) return;
+          clearTimeout(t);
+          window.removeEventListener("message", h);
+          resolve(d.payload);
+        });
+        window.postMessage({ source: "manufactogate-web", id, payload }, "*");
+      }),
+    { id, payload, timeout },
+  );
 const run = (req, timeout) => ask({ type: "run", req }, timeout).then((r) => r.result);
 const marketPages = () => context.pages().filter((p) => p.url().startsWith(base) && p.url() !== `${base}/`);
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -188,13 +205,17 @@ try {
   const imgNone = await timed(() => run({ market: "cn-aliexpress", kind: "search", url: `${base}/image-none.html`, imageDataUrl: png, want: 2, timeoutMs: 15000 }, 60000));
   expect("missing upload widget fails fast as NotFound", imgNone.r && imgNone.r.ok === false && imgNone.r.error === "NotFound" && imgNone.ms < 15000, { ms: imgNone.ms, r: imgNone.r });
 
-  // 14. Fan-out: 10 concurrent runs never exceed the parallel-tab cap and all answer.
+  // 14. Fan-out: 10 concurrent runs never exceed the parallel-tab cap and all answer; the ones behind the cap
+  //     report "queued" first (the web's orchestrator pauses its deadline on that stage).
   let maxOpen = 0;
   const poll = setInterval(() => (maxOpen = Math.max(maxOpen, marketPages().filter((p) => !p.url().includes("/login/")).length)), 100);
+  await page.evaluate(() => (window.__mgProgress = []));
   const fan = await Promise.all(Array.from({ length: 10 }, (_, i) => run({ market: "cn-1688", kind: "search", url: `${base}/results?q=fan${i}`, want: 5, timeoutMs: 15000 }, 120000)));
   clearInterval(poll);
   expect("fan-out respects the parallel tab cap", maxOpen <= 3, { maxOpen });
   expect("all fan-out requests answer with results", fan.every((r) => r?.ok && r.data.items.length >= 5), fan.map((r) => r?.ok));
+  const fanStages = await page.evaluate(() => window.__mgProgress);
+  expect("queued requests report the queued stage before opening", fanStages.filter((s) => s === "queued").length >= 10 && fanStages.includes("opening"), fanStages.slice(0, 20));
   await sleep(500);
   expect("no market tabs remain after the fan-out (login tab aside)", marketPages().filter((p) => !p.url().includes("/login/") && p.url() !== "about:blank").length === 0, marketPages().map((p) => p.url()));
 
@@ -219,6 +240,28 @@ try {
   const st5 = await ask({ type: "status" });
   expect("cancel message drops the connection's runs", cancelled.type === "ok" && st5.status.active.length === 0 && st5.status.queued.length === 0, st5.status);
   await third.close();
+
+  // 15c. Per-request cancel by envelope id (what the web bridge sends when a search's AbortSignal fires):
+  //      the in-flight run answers a cancelled failure within seconds and its tab is closed; a second run
+  //      on the same connection is untouched.
+  const cancelId = "e2e-cancel-" + Date.now();
+  const victim = askWithId(page, cancelId, { type: "run", req: { market: "cn-1688", kind: "search", url: `${base}/slow-results?delay=9000&v=1`, want: 30, timeoutMs: 25000 } }, 60000);
+  const survivor = run({ market: "cn-1688", kind: "search", url: `${base}/results?q=survivor`, want: 5, timeoutMs: 15000 }, 60000);
+  await sleep(2000);
+  const cancelAck = await askWithId(page, "e2e-cancel-msg", { type: "cancel", id: cancelId });
+  const victimTimed = await timed(() => victim.then((r) => r.result));
+  expect("cancel by id stops the in-flight run quickly with a Turkish message", cancelAck.type === "ok" && victimTimed.r && victimTimed.r.ok === false && /iptal/.test(victimTimed.r.message) && victimTimed.ms < 3000, { ack: cancelAck, r: victimTimed.r, ms: victimTimed.ms });
+  const surv = await survivor;
+  expect("other runs of the connection survive a per-id cancel", surv?.ok && surv.data.items.length >= 5, surv);
+  await sleep(500);
+  expect("cancelled run's tab is closed", !context.pages().some((p) => p.url().includes("v=1")), context.pages().map((p) => p.url()));
+  const st6 = await ask({ type: "status" });
+  expect("nothing active after the per-id cancel", st6.status.active.length === 0 && st6.status.queued.length === 0, st6.status);
+
+  // 17. Price snapshot from the app lands in chrome.storage.local.snapshots in the overlay's shape.
+  const snapAck = await ask({ type: "snapshot", snapshot: { key: "tr-trendyol:123", market: "tr-trendyol", listingId: "123", title: "Kask", offers: [{ market: "cn-1688", name: "1688", price: 25.8, currency: "CNY", url: "https://detail.1688.com/offer/9.html" }], seenAt: "2026-10-03T00:00:00Z" } });
+  const stored = await sw.evaluate(async () => (await chrome.storage.local.get("snapshots")).snapshots);
+  expect("snapshot is stored for the overlay", snapAck.type === "ok" && stored?.["tr-trendyol:123"]?.offers?.[0]?.price === 25.8 && stored["tr-trendyol:123"].at === "2026-10-03T00:00:00Z", stored);
 
   // 16. Close-all from the popup path closes the kept login tab too.
   const closed = await ask({ type: "closeTabs" });

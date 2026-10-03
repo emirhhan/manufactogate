@@ -1,19 +1,34 @@
 import { useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { BADGE_LABELS_TR, getProduct, listingFor } from "@manufactogate/adapters";
-import { computeMargin, normalizeBadges, type MarketId } from "@manufactogate/core";
-import { COUNTRY_NAMES_TR, getCountryProfile } from "@manufactogate/country-profiles";
+import { computeMargin, normalizeBadges, type MarketId, type RawListing } from "@manufactogate/core";
+import { COUNTRY_NAMES_TR } from "@manufactogate/country-profiles";
 import { PriceChain } from "@/components/PriceChain";
 import { Badge, Button, Card, Empty } from "@/components/ui";
 import { buildChain, hsSuggest, marketplaceFor, pickQty, scenario } from "@/lib/analysis";
 import { groupOf, leafOf, placeholder, SOURCE_MARKETS, TARGET_MARKET } from "@/lib/catalog";
 import { money, pct, soldText } from "@/lib/format";
-import { minOf } from "@/lib/fx";
+import { maxOf, minOf } from "@/lib/fx";
 import { imageToDataUrl } from "@/lib/images";
 import { getMockRegistry as getRegistry } from "@/lib/registry";
 import { useFxOverrides } from "@/lib/useFx";
 import { useSearch } from "@/store/search";
-import { useSettings } from "@/store/settings";
+import { useCostProfile, useSettings } from "@/store/settings";
+
+/** Copy for listings without a price (B2B "fiyat teklifle" cards have `tiers: []`). */
+export const PRICE_ON_REQUEST = "Fiyat teklifle";
+
+/**
+ * Price range text of a listing in its own currency: a single figure, "min – max", or
+ * "Fiyat teklifle" when the listing has no tiers (never `Math.min()` → Infinity). Pure.
+ */
+export function priceRangeText(price: RawListing["price"]): string {
+  const l = { price };
+  const min = minOf(l);
+  const max = maxOf(l);
+  if (min === null || max === null) return PRICE_ON_REQUEST;
+  return min === max ? money(min, price.currency) : `${money(min, price.currency)} – ${money(max, price.currency)}`;
+}
 
 /** Mock catalog product page: price chain across markets, 1688 ladder, landed cost and margin from Settings. */
 export function Product() {
@@ -23,7 +38,7 @@ export function Product() {
   const running = useSearch((s) => s.running);
   const enabled = useSettings((s) => s.enabledMarkets);
   const cost = useSettings((s) => s.cost);
-  const targetCountry = useSettings((s) => s.targetCountry);
+  const profile = useCostProfile();
   useFxOverrides();
   const [preparing, setPreparing] = useState(false);
   const product = id ? getProduct(id) : undefined;
@@ -44,13 +59,14 @@ export function Product() {
     );
   }
   const leaf = leafOf(product.category);
-  const source = rows.find((r) => r.market === "cn-1688")?.listing ?? rows.find((r) => r.market !== TARGET_MARKET)?.listing;
+  // A source without tiers (price on request) cannot be costed: prefer 1688, then any priced source.
+  const priced = rows.filter((r) => r.listing.price.tiers.length > 0);
+  const source = priced.find((r) => r.market === "cn-1688")?.listing ?? priced.find((r) => r.market !== TARGET_MARKET)?.listing ?? rows.find((r) => r.market !== TARGET_MARKET)?.listing;
   const target = rows.find((r) => r.market === TARGET_MARKET)?.listing;
-  const profile = getCountryProfile(targetCountry) ?? getCountryProfile("tr")!;
   const countryName = COUNTRY_NAMES_TR[profile.country] ?? profile.country.toUpperCase();
   const hs = hsSuggest(leaf?.group);
   const sc = source ? scenario(profile, source, { qty: pickQty(source.price.tiers, source.moq), shippingKey: cost.shippingKey, weightKg: product.weightKg || cost.defaultWeightKg, cnyTry: cost.fxCnyTry, ...(hs ? { hsCode: hs.hs } : {}) }) : null;
-  const sellPrice = target ? minOf(target) : null;
+  const sellPrice = target ? minOf(target) : null; // null for price-on-request targets
   const marketplaceId = marketplaceFor(profile, target?.market);
   const margin = sc && sellPrice ? computeMargin(profile, sc.cost.perUnit, { sellPrice, marketplaceId, overheadRate: cost.overheadRate }) : null;
   const chain = sc && source ? buildChain({ sourceLabel: `${reg.get(source.market)?.meta.name ?? source.market} birim (${sc.qty} adet)`, sourceUnit: sc.cost.tierUsed.unitPrice, sourceCurrency: source.price.currency, landedPerUnit: sc.cost.perUnit, sell: sellPrice && target ? { label: `${reg.get(target.market)?.meta.name ?? target.market} satış`, price: sellPrice } : null, net: margin?.netPerUnit ?? null, currency: profile.currency, cnyTry: cost.fxCnyTry }) : [];
@@ -135,12 +151,11 @@ export function Product() {
                 {rows.map(({ market, listing }) => {
                   const a = reg.get(market);
                   const badges = a ? normalizeBadges(a, listing.badges) : [];
-                  const min = Math.min(...listing.price.tiers.map((t) => t.unitPrice));
-                  const max = Math.max(...listing.price.tiers.map((t) => t.unitPrice));
+                  const noPrice = listing.price.tiers.length === 0;
                   return (
                     <tr key={market} className="border-t border-border">
                       <td className="px-4 py-2 font-medium">{a?.meta.name ?? market}</td>
-                      <td className="py-2 tnum">{min === max ? money(min, listing.price.currency) : `${money(min, listing.price.currency)} – ${money(max, listing.price.currency)}`}</td>
+                      <td className={noPrice ? "py-2 text-muted" : "py-2 tnum"}>{priceRangeText(listing.price)}</td>
                       <td className="py-2 tnum">{listing.moq}</td>
                       <td className="py-2 tnum">{soldText(listing)}</td>
                       <td className="py-2">
@@ -170,6 +185,7 @@ export function Product() {
             <div className="mt-4 grid gap-4 md:grid-cols-2">
               <Card className="p-4">
                 <div className="text-[12px] font-medium uppercase tracking-wide text-muted">{reg.get(source.market)?.meta.name} fiyat merdiveni</div>
+                {source.price.tiers.length === 0 && <p className="mt-2 text-[13px] text-muted">{PRICE_ON_REQUEST}: bu ilan fiyat merdiveni yayınlamıyor; teklif iste.</p>}
                 <ul className="mt-2 space-y-1 text-[13px]">
                   {[...source.price.tiers].sort((a, b) => a.minQty - b.minQty).map((t, i) => (
                     <li key={t.minQty} className={`flex justify-between tnum ${sc && i === sc.tierIndex ? "text-accent" : ""}`}>
@@ -206,9 +222,9 @@ export function Product() {
                     )}
                   </ul>
                 ) : (
-                  <p className="mt-2 text-[12px] text-muted">{source.price.currency} için kur yok.</p>
+                  <p className="mt-2 text-[12px] text-muted">{source.price.tiers.length === 0 ? `${PRICE_ON_REQUEST}: fiyat olmadan indirilmiş maliyet hesaplanamaz.` : `${source.price.currency} için kur yok.`}</p>
                 )}
-                <p className="mt-2 text-[11px] text-muted">Kur 1 {source.price.currency} = {sc ? sc.fx.toFixed(4) : "—"} {profile.currency} (Ayarlar); oranlar {profile.asOf} tarihli{hs ? `; gümrük GTİP ${hs.hs} (${hs.label})` : ""}. Ayarlar'dan kur, kargo ve ağırlık değiştirilebilir.</p>
+                <p className="mt-2 text-[11px] text-muted">Kur 1 {source.price.currency} = {sc ? sc.fx.toFixed(4) : "—"} {profile.currency} (Ayarlar); oranlar {profile.asOf} tarihli{profile.sources.includes("user") ? ", KDV/gümrük/komisyon senin düzenlediğin değerler" : ""}{hs ? `; gümrük GTİP ${hs.hs} (${hs.label})` : ""}. Ayarlar'dan kur, kargo, ağırlık ve ülke oranları değiştirilebilir.</p>
               </Card>
             </div>
           )}

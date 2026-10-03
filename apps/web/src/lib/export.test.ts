@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it } from "vitest";
 import type { RawListing } from "@manufactogate/core";
 import { compareToCsv, csvCell, listingsToCsv, listingsToXls, metaLines, sellersToCsv } from "./export";
-import { clearRateOverrides, setDisplayCurrency, setRateOverride } from "./fx";
+import { clearRateOverrides, convert, setDisplayCurrency, setRateOverride } from "./fx";
 
 afterEach(() => {
   clearRateOverrides();
@@ -56,7 +56,7 @@ describe("export", () => {
     setDisplayCurrency("USD");
     const csv = listingsToCsv([L()], name);
     expect(csv).toContain("yaklasik_usd");
-    expect(csv).toContain(`;${(8 * 4.7 / 34).toFixed(2)};`);
+    expect(csv).toContain(`;${convert(8, "CNY", "USD")!.toFixed(2)};`);
   });
   it("xls has a second sheet with assumptions and typed numbers", () => {
     const xml = listingsToXls([L()], name, { meta: { query: "q" } });

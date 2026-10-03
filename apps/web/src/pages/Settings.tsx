@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { COUNTRY_NAMES_TR, COUNTRY_PROFILES } from "@manufactogate/country-profiles";
+import { COUNTRY_NAMES_TR, COUNTRY_PROFILES, marketplacesOf } from "@manufactogate/country-profiles";
 import { REAL_DEF_BY_ID } from "@manufactogate/adapters";
-import type { HealthResult, MarketAdapter, MarketId, SessionState } from "@manufactogate/core";
+import { hasCountryOverrides, referenceOverrides, type HealthResult, type MarketAdapter, type MarketId, type SessionState } from "@manufactogate/core";
 import { Badge, Button, Card, Input, Select, cn, usePageTitle } from "@/components/ui";
 import { clearData, exportAll, importAll, parseBackup, storageEstimate, tableCounts, type BackupTable } from "@/lib/db";
 import { download } from "@/lib/export";
@@ -9,7 +9,7 @@ import { relTime } from "@/lib/format";
 import { DISPLAY_CURRENCIES, FX_AS_OF, FX_TO_TRY } from "@/lib/fx";
 import { getRegistry, REGION_LABELS_TR, REGION_ORDER, regionOf, type Region } from "@/lib/registry";
 import { isStaleHealth, useExtension } from "@/store/extension";
-import { EDITABLE_FX, MAX_PER_MARKET_OPTIONS, VERIFIED_MARKETS, useSettings, type DataSourcePref, type MaxPerMarket } from "@/store/settings";
+import { EDITABLE_FX, MAX_PER_MARKET_OPTIONS, VERIFIED_MARKETS, useSettings, type CountryOverridesPatch, type DataSourcePref, type MaxPerMarket } from "@/store/settings";
 import { toast } from "@/store/toast";
 import { formatBytes } from "./Dashboard";
 
@@ -46,6 +46,67 @@ export function presetMarkets(kind: "working" | "verified" | "target" | "all" | 
 }
 
 const ROLE_TR = { source: "tedarik", target: "satış", both: "ikisi" } as const;
+
+/** Percent input value → rate fraction patch value: empty or invalid clears the override. Pure. */
+export function pctToRate(raw: string): number | null {
+  const n = Number(raw.replace(",", "."));
+  if (raw.trim() === "" || !Number.isFinite(n) || n < 0 || n >= 100) return null;
+  return Math.round(n * 100) / 10000;
+}
+/** Amount input value → non-negative number patch value; empty or invalid clears the override. Pure. */
+export function amountOrNull(raw: string): number | null {
+  const n = Number(raw.replace(",", "."));
+  return raw.trim() === "" || !Number.isFinite(n) || n < 0 ? null : n;
+}
+const pctText = (r: number) => String(Math.round(r * 10000) / 100);
+
+interface FieldProps {
+  label: string;
+  /** The user's override, undefined when the reference applies. */
+  value: number | undefined;
+  /** Reference figure shown when there is no override and restored by "varsayılan". */
+  def: number;
+  onChange: (raw: string) => void;
+  hint?: string;
+}
+/** Percent field for a rate override; module-level so React keeps the input mounted (and focused) between keystrokes. */
+function RateField({ label, value, def, onChange, hint }: FieldProps) {
+  return (
+    <label className="flex items-center justify-between gap-3" title={hint}>
+      <span>
+        {label}
+        {value !== undefined && (
+          <button type="button" className="ml-2 text-[11px] text-accent hover:underline" onClick={() => onChange("")}>
+            varsayılan {pctText(def)}%
+          </button>
+        )}
+      </span>
+      <span className="flex items-center gap-1">
+        <Input type="number" step="0.5" min="0" max="99" value={pctText(value ?? def)} onChange={(e) => onChange(e.target.value)} className="w-24 text-right tnum" size="sm" aria-label={label} />
+        <span className="text-muted">%</span>
+      </span>
+    </label>
+  );
+}
+/** Amount field (profile currency) for a fee override. */
+function AmountField({ label, value, def, onChange, hint, currency }: FieldProps & { currency: string }) {
+  return (
+    <label className="flex items-center justify-between gap-3" title={hint}>
+      <span>
+        {label}
+        {value !== undefined && (
+          <button type="button" className="ml-2 text-[11px] text-accent hover:underline" onClick={() => onChange("")}>
+            varsayılan {def.toLocaleString("tr-TR")}
+          </button>
+        )}
+      </span>
+      <span className="flex items-center gap-1">
+        <Input type="number" step="1" min="0" value={value ?? def} onChange={(e) => onChange(e.target.value)} className="w-28 text-right tnum" size="sm" aria-label={label} />
+        <span className="text-muted">{currency}</span>
+      </span>
+    </label>
+  );
+}
 
 export function Settings() {
   usePageTitle("Ayarlar");
@@ -336,6 +397,45 @@ export function Settings() {
             <Input type="number" step="1" value={Math.round(s.cost.overheadRate * 100)} onChange={(e) => s.setCost({ overheadRate: (Number(e.target.value) || 0) / 100 })} className="w-28 text-right tnum" size="sm" />
           </label>
         </Card>
+        {(() => {
+          const ref = COUNTRY_PROFILES[s.targetCountry] ?? COUNTRY_PROFILES["tr"]!;
+          const own = s.countryOverrides[ref.country] ?? {};
+          const defaults = referenceOverrides(ref);
+          const edited = hasCountryOverrides(own);
+          const patch = (p: CountryOverridesPatch) => s.setCountryOverrides(ref.country, p);
+          return (
+            <>
+              <h3 className="mb-2 mt-4 flex flex-wrap items-center gap-2 text-[12px] font-medium uppercase tracking-wide text-muted">
+                <span>Ülke oranları · {COUNTRY_NAMES_TR[ref.country] ?? ref.country.toUpperCase()}</span>
+                {edited && <Badge tone="warning">düzenlendi</Badge>}
+                {edited && (
+                  <button type="button" className="ml-auto normal-case tracking-normal text-accent hover:underline" onClick={() => s.resetCountryOverrides(ref.country)}>
+                    Referansa dön ({ref.asOf})
+                  </button>
+                )}
+              </h3>
+              <Card className="grid gap-3 p-4 text-[13px] sm:grid-cols-2" data-testid="country-rates">
+                <RateField label="KDV" value={own.vatRate} def={defaults.vatRate} onChange={(v) => patch({ vatRate: pctToRate(v) })} hint="İthalat ve satış KDV'si. Girdiğin oran her ürüne uygulanır; referansın GTİP'e göre indirimli oranları devre dışı kalır." />
+                <RateField label="Gümrük vergisi (GTİP eşleşmeyen ürünler)" value={own.dutyDefaultRate} def={defaults.dutyDefaultRate} onChange={(v) => patch({ dutyDefaultRate: pctToRate(v) })} hint="GTİP faslı tanınmayan ürünler için varsayılan oran; tanınan fasıllar referans tabloyu kullanır." />
+                <AmountField label="Gümrük müşaviri ve işlem (gönderi başına)" value={own.brokerFee} def={defaults.brokerFee} onChange={(v) => patch({ brokerFee: amountOrNull(v) })} currency={ref.currency} />
+                <AmountField label="Yurt içi kargo (adet başına)" value={own.domesticShippingPerUnit} def={defaults.domesticShippingPerUnit} onChange={(v) => patch({ domesticShippingPerUnit: amountOrNull(v) })} currency={ref.currency} />
+                {marketplacesOf(ref).map((id) => (
+                  <RateField
+                    key={id}
+                    label={`${getRegistry().get(id)?.meta.name ?? REAL_DEF_BY_ID[id]?.meta.name ?? id} komisyonu`}
+                    value={own.commissions?.[id]}
+                    def={defaults.commissions[id] ?? 0}
+                    onChange={(v) => patch({ commissions: { [id]: pctToRate(v) } })}
+                    hint="Satış fiyatı üzerinden pazar yeri komisyonu. Girdiğin oran kategori tablosunun yerine geçer."
+                  />
+                ))}
+                <p className="text-[12px] text-muted sm:col-span-2">
+                  Referans oranlar {ref.asOf} tarihli ve yaklaşıktır; kesin oran GTİP'e göre değişir. Düzenlediğin değerler yalnız bu ülke için saklanır; ürün sayfası, karşılaştırma ve analiz kartı aynı değerleri kullanır. Kargo yöntemi de ülke başına hatırlanır.
+                </p>
+              </Card>
+            </>
+          );
+        })()}
         <h3 className="mb-2 mt-4 text-[12px] font-medium uppercase tracking-wide text-muted">Kurlar · 1 birim = ? TRY</h3>
         <Card className="grid gap-3 p-4 text-[13px] sm:grid-cols-2 lg:grid-cols-4">
           {EDITABLE_FX.map((code) => {

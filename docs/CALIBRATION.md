@@ -100,8 +100,8 @@ aynı bilgiyi koda verir.
 |---|---|---|---|---|---|
 | 1688 | i18n grid, `data-complete-offer-id` | `window.context` regex | CDN görseli / yükleme | canlı | Başlıklar tarayıcı diline çevrilir; `titleLang` işaretlenir. Çince arayüzle bir yakalama istenir |
 | Taobao | `item_id_*` kartları, bölünmüş fiyat | satır içi durum | yapıştırma | canlı | — |
-| Pinduoduo | `rawData.ssrListData.list` | `rawData` / metin yapısı | yok | fixture | Boş SSR listesi = risk kontrolü → `RateLimited` + Türkçe ipucu; `psnl_verification` = captcha. `window.rawData` MAIN dünyasından okunmalı (eklenti) |
-| Trendyol | `__single-search-result__PROPS` | MFE props / legacy state / JSON-LD / metin | yok | canlı | `merchantId` linkte korunur; satıcı seçimi için `fetchListing(id, hint)` core+web değişikliği bekliyor; ürün sayfası yakalaması istenir |
+| Pinduoduo | `rawData.ssrListData.list` | `rawData` / metin yapısı | yok | fixture | Boş SSR listesi = risk kontrolü → `RateLimited`; web "Doğrulama gerekli" + giriş linki gösterir; `psnl_verification` = captcha. `window.rawData` MAIN dünyasından okunur (eklenti). `maxPages: 1` (kaydırmalı XHR) |
+| Trendyol | `__single-search-result__PROPS` | MFE props / legacy state / JSON-LD / metin | yok | canlı | `merchantId` linkte korunur; `fetchListing(id, { url, supplierId })` satıcıya özel sayfayı açar (`SELLER_PARAM`); ürün sayfası yakalaması istenir |
 | Alibaba.com | kart | — | yok | yok | USD/TRY/EUR fiyat; yakalama istenir |
 | AliExpress | kart | — | yok | yok | TR oturumunda TL fiyat; yakalama istenir |
 | Hepsiburada | kart | — | yok | canlı | "(345)" değerlendirme sayısıdır, satış değil |
@@ -117,7 +117,7 @@ aynı bilgiyi koda verir.
 | Shopee ID | kart; insan benzeri yazma | — | yok | yok | giriş duvarı adresi tanınır |
 | Lazada TH | kart; flash-sale fiyatı, eski fiyat atlanır | — | yok | canlı (80) + fixture | — |
 | Rakuten | kart | — | yok | yok | "Frame is showing error page" büyük olasılıkla Akamai 403 (boş gövde); yakalama istenir |
-| Mercari | kart; `ProductThumbItemPrice` | — | yok | fixture (ana sayfa) | Oturum **Mercari US**'e düşer: USD, `www.mercari.com`. Kimlik tarihsel nedenle `jp-mercari` (mock katalog anahtarı) |
+| Mercari | kart; `ProductThumbItemPrice` | — | yok | fixture (ana sayfa) | Oturum **Mercari US**'e düşer: USD, `www.mercari.com`. Kimlik `us-mercari` (eski `jp-mercari` ayarları açılışta taşınır) |
 | Yahoo Auctions | kart; `円` fiyat | — | yok | fixture (ana sayfa) | Ana sayfa `auctions.yahoo.co.jp` (çıplak host); `www.` host yok |
 | Coupang | kart; insan benzeri yazma | — | yok | yok | yakalama istenir |
 | Gmarket | `.text__name`, `span.text__price` (üstü çizili değil) | — | yok | fixture (ana sayfa) | sonuç sayfası `browse.gmarket.co.kr` yakalaması istenir |
@@ -167,14 +167,17 @@ Yakalanan 28 sayfanın 12'si ana sayfa, 4'ü uygulamanın kendisiydi; aşağıda
   araması yapar. Trendyol'un eski "yükleme sayfası" kaldırıldı: her görsel karşılaştırmada sekme açıp
   ~6 s boşa bekleyen yol buydu.
 
-## 8. Diğer alan sahiplerine notlar
+## 8. Diğer alanlarla bağlantı (bu turda kapananlar)
 
-- **Eklenti:** `searchPayloadFor` / `healthPayloadFor` ile strateji ve probe sinyallerini üret;
-  `ExtractRequest.searchBox`, `expectUrl`, `quick` alanlarını kullan (yapıldı). Pinduoduo `window.rawData`
-  için MAIN dünyası köprüsü; Rakuten/Yahoo "error page" sınıflandırması. Sağlık için `kind: "health"` + `quick`.
-- **Core/Web:** `fetchListing(id, hint?: { url })` ile Trendyol'da `merchantId` taşınmalı; boş `tiers`
-  "teklif iste" olarak gösterilmeli; `RawListing.titleLang` (1688) ile kümeleme Çince başlık varsaymamalı;
-  `SearchItem.supplierYears / supplierVerified / businessType / ratingCount` için `supplier` bloğu.
+- **Eklenti:** `searchPayloadFor` / `healthPayloadFor` strateji ve sonda sinyallerini üretir; `ExtractRequest.searchBox`,
+  `expectUrl`, `quick` kullanılır; sağlık için `healthRequestFor(def, quick)` (`background/health.ts`). `cancel` mesajı
+  sıradaki ve açık sekmeleri kapatır; `run:progress` zarfı pazar aşamasını web'e taşır (docs/ADAPTER_SPEC.md 4b).
+- **Core/Web:** `fetchListing(id, hint)` ile Trendyol `merchantId` taşınır (Listing sayfası; `watch.ts` henüz değil);
+  boş `tiers` "Fiyat teklifle" olarak gösterilir; `RawListing.titleLang`, `priceMax`, `priceOnRequest`, `reviewCount`,
+  `soldPeriod`, `supplier{years, verified, businessType, rating}` `enrichListing` ile her pazarda dolar ve
+  Listing/SupplierPanel/`traceScore` bunları okur.
+- **Süre bütçesi:** tek kaynak `TIMING` (`runtime/protocol.ts`); sağlık turu 3 paralel × 8 s, arama 120 s etkin /
+  600 s üst sınır. Buradaki pazar başına sayfa sayıları (`maxPages`) bu bütçeye göre seçilmiştir.
 
 ## 9. Hız ve nezaket
 

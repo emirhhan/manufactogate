@@ -1,12 +1,28 @@
 import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import type { RawListing } from "@manufactogate/core";
+import { COPY } from "@/lib/copy";
 import { db } from "@/lib/db";
 import { useProjects } from "@/store/projects";
+import { toast } from "@/store/toast";
 import { useWatch } from "@/store/watch";
 import { Button, cn } from "./ui";
 
-/** "Projeye ekle" and "İzle" controls for a listing. State resets per listing; the menu closes on outside click and Escape. */
+/** Copies text to the clipboard; false when the browser refuses (no permission, insecure context). */
+export async function copyText(text: string): Promise<boolean> {
+  try {
+    if (typeof navigator === "undefined" || !navigator.clipboard?.writeText) return false;
+    await navigator.clipboard.writeText(text);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * "Projeye ekle", "İzle" and "Bağlantıyı kopyala" controls for a listing. State resets per listing;
+ * the menu closes on outside click and Escape; every action confirms itself with a toast.
+ */
 export function ListingActions({ listing }: { listing: RawListing }) {
   const p = useProjects();
   const w = useWatch();
@@ -61,6 +77,15 @@ export function ListingActions({ listing }: { listing: RawListing }) {
     setInProjects((s) => new Set([...s, projectId]));
     setAdded(name);
     setOpen(false);
+    toast(COPY.toasts.addedToProject(name), { tone: "success", action: { label: COPY.toasts.openProject, to: `/projects/${projectId}` } });
+  };
+  const toggleWatch = async () => {
+    const on = await w.toggle(listing);
+    toast(on ? COPY.toasts.watched : COPY.toasts.unwatched, { tone: on ? "success" : "neutral", action: on ? { label: COPY.toasts.watchlist, to: "/watchlist" } : undefined });
+  };
+  const copy = async () => {
+    const ok = await copyText(listing.url);
+    toast(ok ? COPY.toasts.copied : COPY.toasts.copyFailed, { tone: ok ? "success" : "warning" });
   };
   const label = added ? `Eklendi ✓ ${added}` : inProjects.size ? `${inProjects.size} projede ✓` : "Projeye ekle";
 
@@ -69,8 +94,11 @@ export function ListingActions({ listing }: { listing: RawListing }) {
       <Button size="sm" onClick={() => setOpen((v) => !v)} aria-haspopup="menu" aria-expanded={open}>
         {label}
       </Button>
-      <Button size="sm" variant={watching ? "primary" : "secondary"} onClick={() => void w.toggle(listing)} aria-pressed={watching}>
+      <Button size="sm" variant={watching ? "primary" : "secondary"} onClick={() => void toggleWatch()} aria-pressed={watching}>
         {watching ? "İzleniyor ✓" : "İzle"}
+      </Button>
+      <Button size="sm" variant="ghost" onClick={() => void copy()} title={listing.url} aria-label="Bağlantıyı kopyala">
+        Kopyala
       </Button>
       {open && (
         <div role="menu" className="absolute left-0 top-9 z-10 w-64 rounded-md border border-border bg-surface p-2 shadow-md">

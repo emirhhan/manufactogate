@@ -163,12 +163,24 @@
     timer = null;
   }
 
+  /** Same rule as shared.ts hostMatches/overlayAllowed (classic script: no imports). */
+  function siteDisabled(sites: Record<string, boolean> | undefined): boolean {
+    if (!sites) return false;
+    const h = location.hostname.toLowerCase();
+    for (const [site, on] of Object.entries(sites)) {
+      if (on !== false) continue;
+      const base = site.replace(/^\*\./, "").toLowerCase();
+      if (h === base || h.endsWith("." + base)) return true;
+    }
+    return false;
+  }
+
   async function init(): Promise<void> {
     try {
       const { settings } = await chrome.storage.local.get("settings");
-      const s = settings as { appOrigin?: string; overlay?: boolean } | undefined;
+      const s = settings as { appOrigin?: string; overlay?: boolean; overlaySites?: Record<string, boolean> } | undefined;
       if (s?.appOrigin && /^https?:\/\//.test(s.appOrigin)) appOrigin = s.appOrigin.replace(/\/$/, "");
-      if (s?.overlay === false) enabled = false;
+      if (s?.overlay === false || siteDisabled(s?.overlaySites)) enabled = false;
     } catch {
       /* defaults */
     }

@@ -341,4 +341,46 @@ describe("runSearch", () => {
     expect(pend[0]!.pending).toBeGreaterThan(0);
     expect(events.at(-1)!.type).toBe("finished");
   });
+
+  it("(l) pauses the active-time deadline while the runner reports the request as queued, and surfaces stage/page", async () => {
+    // A fake runner-backed adapter: queued for 120 ms (tab cap reached), then 60 ms of real work.
+    const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+    const a = fakeAdapter({ id: "cn-a" });
+    a.searchByText = async function* (_q, o) {
+      o?.onProgress?.({ stage: "queued" });
+      await sleep(120);
+      o?.onProgress?.({ stage: "opening" });
+      await sleep(30);
+      o?.onProgress?.({ stage: "settling", page: 2 });
+      await sleep(30);
+      yield mk("cn-a", "1", "x");
+      o?.onProgress?.({ stage: "done" });
+    };
+    const events = await collect(runSearch({ kind: "text", query: "q" }, [a], fp, { ...quick, perMarketTimeoutMs: 100, perMarketHardCapMs: 2000 }));
+    const st = statuses(events, "cn-a");
+    expect(st.at(-1)).toMatchObject({ state: "done", received: 1 });
+    expect(st.some((s) => s.state === "running" && s.stage === "queued")).toBe(true);
+    expect(st.some((s) => s.state === "running" && s.stage === "settling" && s.page === 2)).toBe(true);
+    // Without the pause the same market times out: the queue wait alone exceeds the active budget.
+    const b = fakeAdapter({ id: "cn-b" });
+    b.searchByText = async function* () {
+      await sleep(120);
+      yield mk("cn-b", "1", "x");
+    };
+    const events2 = await collect(runSearch({ kind: "text", query: "q" }, [b], fp, { ...quick, perMarketTimeoutMs: 100 }));
+    expect(statuses(events2, "cn-b").at(-1)).toMatchObject({ state: "error", type: "Timeout" });
+  });
+
+  it("(l2) a request stuck in the runner's queue hits the hard cap with a queue-specific message", async () => {
+    const a = fakeAdapter({ id: "cn-a" });
+    a.searchByText = async function* (_q, o) {
+      o?.onProgress?.({ stage: "queued" });
+      await new Promise(() => undefined);
+      yield mk("cn-a", "never", "x");
+    };
+    const events = await collect(runSearch({ kind: "text", query: "q" }, [a], fp, { ...quick, perMarketTimeoutMs: 30, perMarketHardCapMs: 120 }));
+    const last = statuses(events, "cn-a").at(-1);
+    expect(last).toMatchObject({ state: "error", type: "Timeout" });
+    expect(last && last.state === "error" ? last.message : "").toContain("sırada");
+  });
 });

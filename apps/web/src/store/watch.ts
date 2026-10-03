@@ -2,6 +2,7 @@ import { create } from "zustand";
 import type { MarketId, RawListing } from "@manufactogate/core";
 import { db, upsertListing, type WatchRecord } from "@/lib/db";
 import { getDataSource, getRegistry } from "@/lib/registry";
+import { listingHint } from "@/lib/listingFields";
 
 export const WATCH_MOCK_NOTICE = "Fiyat yenileme eklenti ister: sahte veri modunda gerçek ilanlar güncellenmez.";
 /** Watches not checked for this long are refreshed in the background when the app opens. */
@@ -148,7 +149,9 @@ export const useWatch = create<WatchState>((set, get) => ({
           continue;
         }
         try {
-          const d = await adapter.fetchListing(w.listingId);
+          // Seller-specific detail (Trendyol merchantId): hint from the stored listing when we still have it.
+          const stored = await db.listings.get(w.listingKey).catch(() => undefined);
+          const d = await adapter.fetchListing(w.listingId, stored ? listingHint(stored) : undefined);
           const price = minPrice(d);
           if (price === null) throw new Error("İlanda fiyat yok (teklif iste)");
           await db.watches.update(w.listingKey, applyPriceCheck(w, price, at));

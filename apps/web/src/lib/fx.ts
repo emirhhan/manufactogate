@@ -1,65 +1,101 @@
-import type { RawListing } from "@manufactogate/core";
+import { fxAgeDays, fxIsStale, fxRate, withOverrides, type FxTable, type RawListing } from "@manufactogate/core";
+import { REFERENCE_FX } from "@manufactogate/country-profiles";
 
 /**
- * Display-only exchange rates to TRY (indicative, dated). The cost engine and every "≈" figure
- * read the same table, so a rate the user overrides in Settings (CNY today) is used everywhere.
+ * Display and cost exchange rates, built on the core `FxTable` machinery: the dated reference
+ * table from country-profiles (`REFERENCE_FX`, 1 USD = x) extended with a few currencies the
+ * reference does not list, plus the user's pinned TRY rates from Settings applied with
+ * `withOverrides`. Every "≈" figure, the analysis card, exports and the landed-cost engine read
+ * the same effective table, so a rate the user overrides is used everywhere.
  */
-export const FX_AS_OF = "2026-10-01";
-export const FX_TO_TRY: Record<string, number> = {
-  TRY: 1,
-  CNY: 4.7,
-  USD: 34,
-  EUR: 37,
-  GBP: 43,
-  INR: 0.4,
-  IDR: 0.0021,
-  THB: 1.0,
-  JPY: 0.22,
-  KRW: 0.025,
-  RUB: 0.36,
-  AED: 9.3,
-  PLN: 8.5,
-  RON: 7.4,
-  VND: 0.00135,
-  MYR: 7.6,
-  PHP: 0.59,
-  SGD: 25.5,
-  HKD: 4.36,
-  TWD: 1.06,
-  CAD: 24.5,
-  AUD: 22.5,
-  CHF: 38.5,
-  SAR: 9.06,
-  EGP: 0.7,
-  BRL: 6.2,
-  MXN: 1.8,
-  SEK: 3.2,
-  NOK: 3.1,
-  DKK: 4.95,
-  CZK: 1.47,
-  HUF: 0.093,
-  UAH: 0.82,
-  KZT: 0.07,
-  PKR: 0.12,
-  BDT: 0.28,
+
+/** Currencies of markets the registry knows that the core reference table does not carry (1 USD = x, same date). */
+export const EXTRA_USD_RATES: Record<string, number> = {
+  PHP: 57.5, TWD: 32.0, CAD: 1.39, AUD: 1.51, CHF: 0.88, EGP: 48.5, BRL: 5.5, MXN: 18.9, SEK: 10.6, NOK: 10.9, DKK: 6.9, CZK: 23.1, HUF: 365, UAH: 41.5, KZT: 480, PKR: 280, BDT: 121,
 };
 
-const overrides = new Map<string, number>();
+/** The app's reference table: core reference rates first, extras only where the reference is silent. */
+export const FX_TABLE: FxTable = {
+  ...REFERENCE_FX,
+  rates: { ...EXTRA_USD_RATES, ...REFERENCE_FX.rates },
+};
+export const FX_AS_OF = FX_TABLE.asOf;
+export const FX_SOURCE = FX_TABLE.source ?? "gösterge";
+/** Older than this many days, the table is flagged as stale in the UI. */
+export const FX_STALE_DAYS = 7;
 
-/** Pins a rate (1 unit of `code` = `rate` TRY); the user's own CNY rate from Settings lands here. */
+/** Reference TRY rate per unit of each currency (1 unit = x TRY), derived from the table; Settings shows these as defaults. */
+export const FX_TO_TRY: Record<string, number> = Object.fromEntries(
+  Object.keys(FX_TABLE.rates)
+    .map((code) => [code, fxRate(code, "TRY", FX_TABLE)] as const)
+    .filter((e): e is readonly [string, number] => e[1] !== null),
+);
+
+const overrides = new Map<string, number>();
+let effective: FxTable = FX_TABLE;
+let version = 0;
+
+function rebuild(): void {
+  const pairs: Record<string, number> = {};
+  const direct: Partial<Record<string, number>> = {};
+  for (const [code, rate] of overrides) {
+    // A pin on the base currency (1 USD = x TRY) moves the TRY rate itself; crosses against USD stay as in the reference.
+    if (code === FX_TABLE.base) direct.TRY = rate;
+    else pairs[`${code}/TRY`] = rate;
+  }
+  effective = overrides.size ? withOverrides(FX_TABLE, direct, pairs) : FX_TABLE;
+  version++;
+}
+
+/** Pins a rate (1 unit of `code` = `rate` TRY); the user's own rates from Settings land here. */
 export function setRateOverride(code: string, rate: number | null | undefined): void {
-  if (rate === null || rate === undefined || !Number.isFinite(rate) || rate <= 0) overrides.delete(code);
-  else overrides.set(code, rate);
+  const key = code.toUpperCase();
+  if (rate === null || rate === undefined || !Number.isFinite(rate) || rate <= 0) {
+    if (!overrides.delete(key)) return;
+  } else {
+    if (overrides.get(key) === rate) return;
+    overrides.set(key, rate);
+  }
+  rebuild();
 }
 export function clearRateOverrides(): void {
+  if (!overrides.size) return;
   overrides.clear();
+  rebuild();
 }
+/** Currencies the user pinned, with their TRY rate. */
+export function rateOverrides(): Record<string, number> {
+  return Object.fromEntries(overrides);
+}
+/** Changes whenever an override is set or cleared; memos that convert money can depend on it. */
+export function fxVersion(): number {
+  return version;
+}
+
+/**
+ * The table in force (reference + user pins), in the core `FxTable` shape so the cost engine can
+ * take it as `fx: { listingCurrency, table }` and report the date it used.
+ */
+export function effectiveFxTable(): FxTable {
+  return effective;
+}
+
+export interface FxStaleness {
+  asOf: string;
+  ageDays: number;
+  stale: boolean;
+  source: string;
+  /** Currencies the user pinned (those rates are never stale). */
+  pinned: string[];
+}
+/** How old the reference rates are; `stale` after `FX_STALE_DAYS`. Pure for a given `now`. */
+export function fxStaleness(now: Date | string = new Date()): FxStaleness {
+  return { asOf: FX_AS_OF, ageDays: fxAgeDays(FX_TABLE, now), stale: fxIsStale(FX_TABLE, FX_STALE_DAYS, now), source: FX_SOURCE, pinned: [...overrides.keys()] };
+}
+
 /** Rate to TRY for a currency, overrides first; null when the code is unknown. */
 export function getRate(code: string): number | null {
-  const o = overrides.get(code);
-  if (o !== undefined) return o;
-  const r = FX_TO_TRY[code];
-  return r ? r : null;
+  return fxRate(code, "TRY", effective);
 }
 export function hasRate(code: string): boolean {
   return getRate(code) !== null;
@@ -73,9 +109,8 @@ export function toTry(amount: number, currency: string): number | null {
 /** Converts between any two currencies in the table; null when either rate is unknown. */
 export function convert(amount: number, from: string, to: string): number | null {
   if (from === to) return amount;
-  const a = getRate(from);
-  const b = getRate(to);
-  return a && b ? (amount * a) / b : null;
+  const r = fxRate(from, to, effective);
+  return r === null ? null : amount * r;
 }
 
 export const DISPLAY_CURRENCIES = ["TRY", "USD", "EUR", "GBP"] as const;
@@ -101,12 +136,13 @@ export function minOf(l: Pick<RawListing, "price">): number | null {
   for (const x of t) if (x.unitPrice < m) m = x.unitPrice;
   return Number.isFinite(m) ? m : null;
 }
-/** Highest tier price of a listing; null when the listing has no tiers. */
-export function maxOf(l: Pick<RawListing, "price">): number | null {
+/** Highest tier price of a listing (or its `priceMax` range top when larger); null when the listing has no tiers. */
+export function maxOf(l: Pick<RawListing, "price"> & { priceMax?: number | undefined }): number | null {
   const t = l.price.tiers;
   if (!t.length) return null;
   let m = -Infinity;
   for (const x of t) if (x.unitPrice > m) m = x.unitPrice;
+  if (l.priceMax !== undefined && Number.isFinite(l.priceMax) && l.priceMax > m) m = l.priceMax;
   return Number.isFinite(m) ? m : null;
 }
 

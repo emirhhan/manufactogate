@@ -7,8 +7,23 @@ export interface PriceTier {
 
 export interface PriceInfo {
   currency: CurrencyCode;
-  /** Single-price listings carry one tier with minQty 1 (or the MOQ). */
+  /** Single-price listings carry one tier with minQty 1 (or the MOQ). Empty for price-on-request B2B listings. */
   tiers: PriceTier[];
+}
+
+export type BusinessType = "factory" | "trading" | "unknown";
+
+/** Supplier intelligence a result card already shows (no profile page needed). */
+export interface ListingSupplierInfo {
+  /** Years on the platform ("16 Years", "7+ yrs", "2年"). */
+  years?: number;
+  /** The market marks the supplier as verified / trusted / audited. */
+  verified?: boolean;
+  businessType?: BusinessType;
+  /** Supplier (shop) rating, on `ratingMax` scale (default 5). */
+  rating?: number;
+  /** Number of supplier ratings. */
+  ratingCount?: number;
 }
 
 /** What a market's "sold" counter measures. */
@@ -37,8 +52,16 @@ export interface RawListing {
   /** Country the item ships from, when the market shows it. */
   shipFrom?: CountryCode;
   variantCount?: number;
+  /** Upper bound of a price range ("US$ 14.49 - 14.99"); `price.tiers` carries the lower bound. */
+  priceMax?: number;
+  /** B2B listing without a list price ("Ask for a Quote", "Negotiable"); `price.tiers` is empty. */
+  priceOnRequest?: boolean;
+  /** Language the title is written in on the page (markets localise titles for the browser language). */
+  titleLang?: string;
   supplierId?: string;
   supplierName?: string;
+  /** Supplier signals read from the card itself (years, verified, business type, shop rating). */
+  supplier?: ListingSupplierInfo;
   location?: string;
   badges: string[];
   fetchedAt: IsoDateTime;
@@ -56,8 +79,6 @@ export interface RawListingDetail extends RawListing {
   shippingFrom?: string;
   attributes?: Record<string, string>;
 }
-
-export type BusinessType = "factory" | "trading" | "unknown";
 
 export interface RawSupplier {
   market: MarketId;

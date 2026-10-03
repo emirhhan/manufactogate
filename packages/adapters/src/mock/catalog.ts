@@ -173,7 +173,7 @@ export const MARKET_PROFILE: Record<string, { lang: "zh" | "tr" | "en"; currency
   "id-shopee": { lang: "en", currency: "IDR", mult: 2200, moq: 1, tiers: false },
   "th-lazada": { lang: "en", currency: "THB", mult: 5.2, moq: 1, tiers: false },
   "jp-rakuten": { lang: "en", currency: "JPY", mult: 24, moq: 1, tiers: false },
-  "jp-mercari": { lang: "en", currency: "JPY", mult: 16, moq: 1, tiers: false },
+  "us-mercari": { lang: "en", currency: "USD", mult: 0.42, moq: 1, tiers: false },
   "jp-yahooauctions": { lang: "en", currency: "JPY", mult: 14, moq: 1, tiers: false },
   "kr-coupang": { lang: "en", currency: "KRW", mult: 210, moq: 1, tiers: false },
   "kr-gmarket": { lang: "en", currency: "KRW", mult: 200, moq: 1, tiers: false },

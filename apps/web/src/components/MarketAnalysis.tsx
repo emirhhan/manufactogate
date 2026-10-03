@@ -52,7 +52,11 @@ export function MarketAnalysisCard({ a, title, children }: { a: Analysis; title:
         <Stat
           label="Tahmini net marj"
           big={a.marginAtMedian ? `%${(a.marginAtMedian.rate * 100).toFixed(0)}` : "—"}
-          sub={a.landedPerUnit !== null ? `indirilmiş maliyet ${money(a.landedPerUnit, a.target.currency)}/adet${a.landedQty ? ` · ${a.landedQty} adet` : ""}` : "tedarik fiyatı yok"}
+          sub={
+            a.landedPerUnit !== null
+              ? `indirilmiş maliyet ${money(a.landedPerUnit, a.target.currency)}/adet${a.landedQty ? ` · ${a.landedQty} adet` : ""}${a.marginAtMedian ? ` · KDV %${Math.round(a.marginAtMedian.vatRate * 100)} ve komisyon %${Math.round(a.marginAtMedian.commissionRate * 100)} sonrası` : ""}`
+              : "tedarik fiyatı yok"
+          }
           tone={a.marginAtMedian ? (a.marginAtMedian.rate > 0.25 ? "text-success" : a.marginAtMedian.rate > 0 ? "text-warning" : "text-danger") : ""}
         />
       </div>

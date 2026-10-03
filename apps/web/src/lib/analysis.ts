@@ -1,8 +1,14 @@
-import { computeLandedCost, computeMargin, normalizeBadges, pickTier, type CostResult, type CountryProfile, type MarketAdapter, type MarketId, type NormalizedBadge, type PriceTier, type RawListing, type RawSupplier } from "@manufactogate/core";
-import { getCountryProfile } from "@manufactogate/country-profiles";
+import { computeLandedCost, computeMargin, HS_BY_GROUP, normalizeBadges, pickTier, traceScore, unitPriceNormalized, type CostResult, type CountryProfile, type MarketAdapter, type MarketId, type NormalizedBadge, type PriceTier, type RawListing, type RawSupplier, type TraceContext } from "@manufactogate/core";
 import { convert, getRate, minOf } from "./fx";
+import { supplierFromListing } from "./listingFields";
 import { sellerDisplayName, storeUrl } from "./markets";
 import { getRegistry } from "./registry";
+import { effectiveProfile, useSettings } from "@/store/settings";
+
+/** The cost profile of a target country with the user's overrides from Settings applied (non-React callers). */
+export function costProfileFor(targetCountry: string): CountryProfile {
+  return effectiveProfile(targetCountry, useSettings.getState().countryOverrides);
+}
 
 /** Robust central tendency helpers. */
 export function median(xs: number[]): number | null {
@@ -127,8 +133,8 @@ export interface MarketAnalysis {
   landedPerUnit: number | null;
   landedFrom: RawListing | null;
   landedQty: number | null;
-  /** Net margin at the target median price. */
-  marginAtMedian: { net: number; rate: number } | null;
+  /** Net margin at the target median price (VAT-aware: consumer price ex-VAT, commission, import VAT recovered). */
+  marginAtMedian: { net: number; rate: number; commissionRate: number; vatRate: number; marketplaceId: string } | null;
   /** 0..100: how attractive this product looks for import + resale. */
   score: number;
   sub: SubScores;
@@ -149,6 +155,8 @@ export interface AnalyzeOptions {
   /** Title relevance per listing; listings under `minRelevance` are left out (fallback to all when < 5 remain). */
   relevanceOf?: (l: RawListing) => number | undefined;
   minRelevance?: number;
+  /** Cost profile to use; defaults to the target country's profile with the user's overrides applied. */
+  profile?: CountryProfile;
 }
 
 /** Builds the factory → landed → retail → net chain in one currency, with step deltas. */
@@ -173,7 +181,7 @@ export function buildChain(input: { sourceLabel: string; sourceUnit: number; sou
 /** Summarises a result set: where it is cheapest, who sells it in the target country, and whether the margin works. */
 export function analyzeResults(all: RawListing[], opts: AnalyzeOptions): MarketAnalysis {
   const reg = getRegistry();
-  const profile = getCountryProfile(opts.targetCountry) ?? getCountryProfile("tr")!;
+  const profile = opts.profile ?? costProfileFor(opts.targetCountry);
   const cur = profile.currency;
   const minRel = opts.minRelevance ?? 0.5;
   let listings = all;
@@ -239,7 +247,7 @@ export function analyzeResults(all: RawListing[], opts: AnalyzeOptions): MarketA
     landedPerUnit !== null && target.median
       ? (() => {
           const m = computeMargin(profile, landedPerUnit, { sellPrice: target.median!, marketplaceId, overheadRate: opts.overheadRate });
-          return { net: m.netPerUnit, rate: m.marginRate };
+          return { net: m.netPerUnit, rate: m.marginRate, commissionRate: m.commissionRate, vatRate: profile.salesVatRate ?? 0, marketplaceId };
         })()
       : null;
 
@@ -308,7 +316,7 @@ export interface Scenario {
 }
 
 /** Landed-cost scenario for one listing at a quantity, with the tier it falls into highlighted. */
-export function scenario(profile: CountryProfile, listing: Pick<RawListing, "price" | "moq">, input: ScenarioInput): Scenario | null {
+export function scenario(profile: CountryProfile, listing: Pick<RawListing, "price" | "moq"> & { packQty?: number | undefined }, input: ScenarioInput): Scenario | null {
   if (!listing.price.tiers.length) return null;
   const fx = rateFor(listing.price.currency, profile.currency, input.cnyTry);
   if (fx === null) return null;
@@ -320,6 +328,7 @@ export function scenario(profile: CountryProfile, listing: Pick<RawListing, "pri
     fxRate: fx,
     unitWeightKg: input.weightKg,
     shippingKey,
+    ...(listing.packQty && listing.packQty > 1 ? { packQty: listing.packQty } : {}),
     ...(input.hsCode ? { hsCode: input.hsCode } : {}),
     ...(input.insuranceRate !== undefined ? { insuranceRate: input.insuranceRate } : {}),
     ...(input.extraPerUnit ? { extraPerUnit: input.extraPerUnit } : {}),
@@ -428,28 +437,24 @@ export function sellersOf(listings: RawListing[], opts: { markets?: ReadonlySet<
   return [...rows.values()].sort((a, b) => (a.minPrice ?? Infinity) - (b.minPrice ?? Infinity));
 }
 
-/** Factory-vs-trader heuristic for a supplier listing (0..1 factory likelihood) with reasons. */
-export function supplierScore(l: RawListing, profile?: RawSupplier | null): { factory: number; reasons: string[] } {
+/**
+ * Factory-vs-trader likelihood for a supplier listing (0..1) with reasons: the core trace scorer
+ * fed with the market's normalised badges, the shop profile when fetched, and otherwise the
+ * supplier signals the card itself carried (years, verified, business type).
+ */
+export function supplierScore(l: RawListing, profile?: RawSupplier | null, ctx: TraceContext = {}): { factory: number; reasons: string[] } {
   const reg = getRegistry();
   const a = reg.get(l.market);
   const badges = a ? normalizeBadges(a, l.badges) : [];
-  let score = 0.3;
-  const reasons: string[] = [];
-  if (badges.includes("verified-factory")) { score += 0.4; reasons.push("kaynak fabrika etiketi"); }
-  if (badges.includes("deep-factory-audit") || badges.includes("on-site-verified")) { score += 0.15; reasons.push("yerinde denetim"); }
-  if (badges.includes("strength-merchant") || badges.includes("verified-supplier")) { score += 0.05; reasons.push("doğrulanmış satıcı"); }
-  const name = `${l.supplierName ?? ""} ${profile?.name ?? ""}`;
-  if (/实业|工厂|制造|科技有限公司|Manufactur|Factory|Industrial/i.test(name)) { score += 0.15; reasons.push("firma adı üretim gösteriyor"); }
-  if (/商贸|贸易|Trading|Trade Co/i.test(name)) { score -= 0.2; reasons.push("firma adı ticaret gösteriyor"); }
-  if ((l.moq ?? 1) >= 50) { score += 0.05; reasons.push("yüksek MOQ"); }
-  if (l.price.tiers.length >= 3) { score += 0.05; reasons.push("kademeli fiyat"); }
-  if (profile) {
-    if (profile.businessType === "factory") { score += 0.25; reasons.push("mağaza profili: üretici"); }
-    else if (profile.businessType === "trading") { score -= 0.15; reasons.push("mağaza profili: ticaret"); }
-    if ((profile.yearsOnPlatform ?? 0) >= 5) { score += 0.05; reasons.push(`${profile.yearsOnPlatform} yıldır pazarda`); }
-    if ((profile.repeatPurchaseRate ?? 0) >= 0.3) { score += 0.05; reasons.push(`tekrar alım %${Math.round((profile.repeatPurchaseRate ?? 0) * 100)}`); }
-  }
-  return { factory: Math.max(0, Math.min(1, score)), reasons };
+  return traceScore(l, badges, supplierFromListing(l, profile), ctx);
+}
+
+/** Cluster price context for the trace scorer: minimum and median unit price among peers of the same currency. Pure. */
+export function traceContextOf(listings: RawListing[], currency: string): TraceContext {
+  const ps = listings.filter((p) => p.price.currency === currency).map((p) => unitPriceNormalized(p)).filter((n): n is number => n !== null && n > 0);
+  if (!ps.length) return {};
+  const med = median(ps);
+  return { clusterMinPrice: Math.min(...ps), ...(med !== null ? { clusterMedianPrice: med } : {}) };
 }
 
 export interface RiskFlag {
@@ -463,9 +468,14 @@ export function supplierRisk(l: RawListing, profile: RawSupplier | null | undefi
   const a = reg.get(l.market);
   const badges = a ? normalizeBadges(a, l.badges) : [];
   const flags: RiskFlag[] = [];
-  if (!badges.length && !(profile?.badges.length)) flags.push({ tone: "warning", text: "Doğrulama etiketi yok" });
-  if (profile?.yearsOnPlatform !== undefined && profile.yearsOnPlatform < 2) flags.push({ tone: "warning", text: `Yeni mağaza (${profile.yearsOnPlatform} yıl)` });
-  if (profile?.yearsOnPlatform !== undefined && profile.yearsOnPlatform >= 5) flags.push({ tone: "success", text: `${profile.yearsOnPlatform} yıldır pazarda` });
+  const card = l.supplier;
+  if (!badges.length && !(profile?.badges.length) && !card?.verified) flags.push({ tone: "warning", text: "Doğrulama etiketi yok" });
+  const years = profile?.yearsOnPlatform ?? card?.years;
+  if (years !== undefined && years < 2) flags.push({ tone: "warning", text: `Yeni mağaza (${years} yıl)` });
+  if (years !== undefined && years >= 5) flags.push({ tone: "success", text: `${years} yıldır pazarda` });
+  const bt = profile?.businessType ?? card?.businessType;
+  if (bt === "trading") flags.push({ tone: "neutral", text: "Ticaret firması (üretici değil)" });
+  if (card?.rating !== undefined && (card.rating > 5 ? card.rating / 20 : card.rating) < 3.5) flags.push({ tone: "warning", text: `Düşük mağaza puanı (${(card.rating > 5 ? card.rating / 20 : card.rating).toFixed(1)})` });
   if (profile?.repeatPurchaseRate !== undefined) flags.push({ tone: profile.repeatPurchaseRate >= 0.3 ? "success" : "neutral", text: `Tekrar alım %${Math.round(profile.repeatPurchaseRate * 100)}` });
   if (profile?.responseRate !== undefined && profile.responseRate < 0.8) flags.push({ tone: "warning", text: `Yanıt oranı %${Math.round(profile.responseRate * 100)}` });
   const mine = minOf(l);
@@ -495,9 +505,15 @@ export interface ManufacturerCandidate {
 export function rankManufacturers(listings: RawListing[], profiles: Partial<Record<string, RawSupplier | null>> = {}): ManufacturerCandidate[] {
   const prices = listings.map(minOf).filter((n): n is number => n !== null && n > 0);
   const med = median(prices);
+  const ctxByCurrency = new Map<string, TraceContext>();
   return listings
     .map((l) => {
-      const s = supplierScore(l, profiles[`${l.market}:${l.supplierId ?? l.supplierName ?? ""}`] ?? null);
+      let ctx = ctxByCurrency.get(l.price.currency);
+      if (!ctx) {
+        ctx = traceContextOf(listings, l.price.currency);
+        ctxByCurrency.set(l.price.currency, ctx);
+      }
+      const s = supplierScore(l, profiles[`${l.market}:${l.supplierId ?? l.supplierName ?? ""}`] ?? null, ctx);
       const m = minOf(l);
       const pricePosition = med && m !== null ? m / med : null;
       const priceBonus = pricePosition === null ? 0 : Math.max(-0.2, Math.min(0.2, (1 - pricePosition) * 0.4));
@@ -506,32 +522,9 @@ export function rankManufacturers(listings: RawListing[], profiles: Partial<Reco
     .sort((a, b) => b.rank - a.rank);
 }
 
-/** Rough HS chapter suggestion from the taxonomy group of a title (refined per product in the cost settings). */
-const HS_BY_GROUP: Record<string, { hs: string; label: string }> = {
-  electronics: { hs: "8517", label: "Elektronik cihazlar ve aksesuarları" },
-  computer: { hs: "8471", label: "Bilgisayar ve çevre birimleri" },
-  home: { hs: "7323", label: "Ev eşyası" },
-  kitchen: { hs: "8516", label: "Elektrikli mutfak aletleri" },
-  appliances: { hs: "8509", label: "Küçük ev aletleri" },
-  "fashion-women": { hs: "6204", label: "Kadın giyim" },
-  "fashion-men": { hs: "6203", label: "Erkek giyim" },
-  shoes: { hs: "6402", label: "Ayakkabı" },
-  bags: { hs: "4202", label: "Çanta ve valiz" },
-  accessories: { hs: "9004", label: "Gözlük ve aksesuar" },
-  beauty: { hs: "3304", label: "Kozmetik" },
-  health: { hs: "9018", label: "Tıbbi cihaz" },
-  sports: { hs: "9506", label: "Spor malzemesi" },
-  motorcycle: { hs: "6506", label: "Kask ve koruyucu başlık" },
-  auto: { hs: "8708", label: "Oto yedek parça" },
-  tools: { hs: "8205", label: "El aletleri" },
-  garden: { hs: "8201", label: "Bahçe aletleri" },
-  toys: { hs: "9503", label: "Oyuncak" },
-  baby: { hs: "8715", label: "Bebek ürünleri" },
-  pet: { hs: "4201", label: "Evcil hayvan ürünleri" },
-  office: { hs: "9608", label: "Kırtasiye" },
-  industrial: { hs: "4819", label: "Ambalaj" },
-};
+/** Chapter-level HS suggestion from a taxonomy group (core table); product-level suggestions live in lib/hs.ts. */
 export function hsSuggest(groupKey: string | undefined): { hs: string; label: string } | null {
-  return groupKey ? (HS_BY_GROUP[groupKey] ?? null) : null;
+  const hit = groupKey ? HS_BY_GROUP[groupKey] : undefined;
+  return hit ? { hs: hit[0], label: hit[1] } : null;
 }
-export const HS_OPTIONS = Object.entries(HS_BY_GROUP).map(([group, v]) => ({ group, ...v }));
+export const HS_OPTIONS = Object.entries(HS_BY_GROUP).map(([group, [hs, label]]) => ({ group, hs, label }));

@@ -317,7 +317,7 @@ export const WAVE3_DEFS: RealMarketDef[] = [
   }),
   // The capture shows the user's session lands on Mercari US (www.mercari.com, USD); jp.mercari.com is a separate CSR-only site.
   makeDef({
-    id: "jp-mercari", name: "Mercari (US)", country: "us", currency: "USD", language: "en", role: "both", hosts: ["*.mercari.com"],
+    id: "us-mercari", name: "Mercari (US)", country: "us", currency: "USD", language: "en", role: "both", hosts: ["*.mercari.com"],
     searchUrl: (q) => `https://www.mercari.com/search/?keyword=${encodeURIComponent(q)}`,
     link: /(?:mercari\.com)?\/(?:us\/)?item\/(m\d+)/, detailUrl: (id) => `https://www.mercari.com/us/item/${id}/`,
     price: USD,

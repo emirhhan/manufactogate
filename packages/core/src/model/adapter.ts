@@ -35,9 +35,34 @@ export interface ImageInput {
   region?: { x: number; y: number; w: number; h: number };
 }
 
+/**
+ * Stage of a request inside the page runner (the extension), reported live while a search runs.
+ * "queued" means the runner has not opened a tab yet (waiting for a free slot): the orchestrator
+ * pauses the market's deadline while a request is queued, so a tab cap of 3 never produces a
+ * spurious Timeout for the markets behind it.
+ */
+export type AdapterStage = "queued" | "opening" | "loading" | "typing" | "image" | "settling" | "captcha" | "done";
+
+export interface AdapterProgress {
+  stage: AdapterStage;
+  /** Result page being read (1-based) when the adapter walks several pages. */
+  page?: number;
+}
+
 export interface SearchOptions {
   maxResults?: number;
+  /** Aborting cancels the in-flight page request as well (the runner is told to stop), not only the loop between pages. */
   signal?: AbortSignal;
+  /** Live stage of the request (queued/opening/loading/typing/settling/…), when the adapter runs through a page runner. */
+  onProgress?: (progress: AdapterProgress) => void;
+}
+
+/** Hints that let an adapter fetch the exact offer the user saw (seller-specific page, original URL). */
+export interface ListingHint {
+  /** The URL the listing was found at; adapters keep seller parameters from it (Trendyol merchantId). */
+  url?: string;
+  /** Seller whose offer should be shown when the market serves one page per seller. */
+  supplierId?: string;
 }
 
 export interface LinkInfo {
@@ -89,7 +114,8 @@ export interface MarketAdapter {
   searchByImage(input: ImageInput, opts?: SearchOptions): AsyncIterable<RawListing>;
   searchByText(query: string, opts?: SearchOptions): AsyncIterable<RawListing>;
 
-  fetchListing(id: string): Promise<RawListingDetail>;
+  /** Detail of a listing; `hint` lets the adapter open the seller-specific page instead of the buy-box winner. */
+  fetchListing(id: string, hint?: ListingHint): Promise<RawListingDetail>;
   fetchSupplier(id: string): Promise<RawSupplier>;
 
   healthCheck(): Promise<HealthResult>;

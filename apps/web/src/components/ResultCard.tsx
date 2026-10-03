@@ -1,3 +1,4 @@
+import { memo } from "react";
 import { normalizeBadges, type RawListing } from "@manufactogate/core";
 import { BADGE_LABELS_TR } from "@manufactogate/adapters";
 import { Link } from "react-router-dom";
@@ -17,7 +18,7 @@ import { Badge, cn } from "./ui";
  * `confidence` is the cross-market cluster confidence (image + title + model number);
  * `relevance` is title-only similarity to the query. They are labelled differently on purpose.
  */
-export function ResultCard({
+function ResultCardInner({
   listing,
   confidence,
   relevance,
@@ -104,3 +105,6 @@ export function ResultCard({
     </div>
   );
 }
+
+/** Memoised: a results grid of hundreds of cards must not re-render every card when one market streams in. */
+export const ResultCard = memo(ResultCardInner);

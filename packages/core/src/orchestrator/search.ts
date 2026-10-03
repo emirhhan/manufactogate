@@ -3,6 +3,8 @@ import { IncrementalClusterer, keyOf, type Cluster, type ScoredListing } from ".
 import {
   AdapterError,
   type AdapterErrorType,
+  type AdapterProgress,
+  type AdapterStage,
   type ImageInput,
   type MarketAdapter,
   type MarketId,
@@ -20,7 +22,8 @@ export type MarketPhase = "image" | "text" | "detail";
 
 export type MarketStatus =
   | { state: "pending" }
-  | { state: "running"; received: number; phase?: MarketPhase; rung?: number }
+  /** `stage`/`page` mirror the page runner's live progress (queued, typing, settling, page 2…) when the adapter reports it. */
+  | { state: "running"; received: number; phase?: MarketPhase; rung?: number; stage?: AdapterStage; page?: number }
   | { state: "done"; received: number; durationMs: number; cancelled?: boolean }
   | { state: "error"; type: AdapterErrorType; message: string; retryable: boolean };
 
@@ -64,8 +67,15 @@ export interface SearchRunOptions {
   concurrency?: number;
   /** Lower runs first; ties keep the given order. */
   priority?: (adapter: MarketAdapter) => number;
-  /** A market that has not finished by then is reported as Timeout. */
+  /**
+   * Active-time budget per market: a market that has not finished within this much *active* time is
+   * reported as Timeout. Time the page runner spends with the request queued (waiting for a tab slot,
+   * reported through `SearchOptions.onProgress` as stage "queued") does not count, so the budget
+   * agrees with the extension's own per-request budget whatever the tab cap is.
+   */
   perMarketTimeoutMs?: number;
+  /** Absolute cap per market, queue time included; protects against a runner that never starts. */
+  perMarketHardCapMs?: number;
   /** Parallel image fingerprints. */
   fingerprintConcurrency?: number;
   /** How long `finished` waits for outstanding image fingerprints after the last market. */
@@ -85,8 +95,8 @@ export interface SearchRunOptions {
 }
 
 class TimeoutError extends Error {
-  constructor(ms: number) {
-    super(`pazar ${Math.round(ms / 1000)} sn içinde yanıt vermedi`);
+  constructor(ms: number, message?: string) {
+    super(message ?? `pazar ${Math.round(ms / 1000)} sn içinde yanıt vermedi`);
     this.name = "TimeoutError";
   }
 }
@@ -130,9 +140,14 @@ function sleep(ms: number): Promise<void> {
   return new Promise((r) => setTimeout(r, ms));
 }
 
-/** Iterates `iter`, failing with TimeoutError past `deadline` and AbortedError when the signal fires. */
-async function* withDeadline<T>(iter: AsyncIterable<T>, deadline: number, signal?: AbortSignal): AsyncGenerator<T> {
+/**
+ * Iterates `iter`, failing with TimeoutError past `deadline()` and AbortedError when the signal fires.
+ * The deadline is read again whenever the timer fires, so a deadline that moved forward meanwhile
+ * (queued time credited back) simply re-arms instead of timing out early.
+ */
+async function* withDeadline<T>(iter: AsyncIterable<T>, deadline: () => number, signal?: AbortSignal, timeoutMessage?: () => string): AsyncGenerator<T> {
   const it = iter[Symbol.asyncIterator]();
+  const expired = (ms: number) => new TimeoutError(ms, timeoutMessage?.());
   let onAbort: (() => void) | null = null;
   const abortP = signal
     ? new Promise<never>((_, rej) => {
@@ -144,11 +159,19 @@ async function* withDeadline<T>(iter: AsyncIterable<T>, deadline: number, signal
   abortP?.catch(() => undefined);
   try {
     while (true) {
-      const remaining = deadline - Date.now();
-      if (remaining <= 0) throw new TimeoutError(Date.now() - deadline + remaining);
+      const startedAt = Date.now();
+      if (deadline() - startedAt <= 0) throw expired(0);
       let timer: ReturnType<typeof setTimeout> | undefined;
       const timeout = new Promise<never>((_, rej) => {
-        timer = setTimeout(() => rej(new TimeoutError(remaining)), remaining);
+        const arm = () => {
+          const remaining = deadline() - Date.now();
+          if (remaining <= 0) {
+            rej(expired(Date.now() - startedAt));
+            return;
+          }
+          timer = setTimeout(arm, remaining);
+        };
+        arm();
       });
       let res: IteratorResult<T>;
       try {
@@ -238,6 +261,7 @@ export async function* runSearch(
   const reclusterIntervalMs = opts.reclusterIntervalMs ?? 250;
   const concurrency = Math.max(1, opts.concurrency ?? 6);
   const perMarketTimeoutMs = opts.perMarketTimeoutMs ?? 120_000;
+  const perMarketHardCapMs = Math.max(perMarketTimeoutMs, opts.perMarketHardCapMs ?? 600_000);
   const fingerprintConcurrency = Math.max(1, opts.fingerprintConcurrency ?? 4);
   const fingerprintGraceMs = opts.fingerprintGraceMs ?? 20_000;
   const ladderMinResults = opts.ladderMinResults ?? 5;
@@ -426,20 +450,46 @@ export async function* runSearch(
 
     const runMarket = async (adapter: MarketAdapter) => {
       const t0 = Date.now();
-      const deadline = t0 + perMarketTimeoutMs;
+      // Deadline on active time: while the runner reports the request as queued the clock is paused
+      // (the queued span is credited back when the request starts); the hard cap bounds the whole wait.
+      let deadline = t0 + perMarketTimeoutMs;
+      const hardCap = t0 + perMarketHardCapMs;
+      let queuedAt: number | null = null;
+      const deadlineNow = () => (queuedAt !== null ? hardCap : Math.min(deadline, hardCap));
+      const timeoutMessage = () =>
+        queuedAt !== null
+          ? `pazar ${Math.round(perMarketHardCapMs / 60000)} dk boyunca sırada bekledi (eklenti sekme açamadı)`
+          : `pazar ${Math.round(perMarketTimeoutMs / 1000)} sn etkin süre içinde yanıt vermedi`;
       let received = 0;
       let phase: MarketPhase = "text";
       let rung: number | undefined;
+      let stage: AdapterStage | undefined;
+      let page: number | undefined;
       let lastStatus = 0;
       let sinceStatus = 0;
       const seen = new Set<string>();
       const status = (force: boolean) => {
         if (!force && sinceStatus < 10 && Date.now() - lastStatus < statusIntervalMs) return;
-        emit({ type: "market", market: adapter.id, status: { state: "running", received, phase, ...(rung !== undefined ? { rung } : {}) } });
+        emit({
+          type: "market",
+          market: adapter.id,
+          status: { state: "running", received, phase, ...(rung !== undefined ? { rung } : {}), ...(stage ? { stage } : {}), ...(page !== undefined ? { page } : {}) },
+        });
         lastStatus = Date.now();
         sinceStatus = 0;
       };
-      const so: SearchOptions = {};
+      const onProgress = (p: AdapterProgress) => {
+        if (p.stage === "queued") {
+          if (queuedAt === null) queuedAt = Date.now();
+        } else if (queuedAt !== null) {
+          deadline += Date.now() - queuedAt;
+          queuedAt = null;
+        }
+        stage = p.stage === "done" ? undefined : p.stage;
+        page = p.stage === "done" ? undefined : p.page;
+        status(true);
+      };
+      const so: SearchOptions = { onProgress };
       if (Number.isFinite(maxPerMarket)) so.maxResults = maxPerMarket;
       if (signal) so.signal = signal;
       const finishDone = () =>
@@ -462,7 +512,7 @@ export async function* runSearch(
           phase = ph;
           rung = r;
           status(true);
-          for await (const l of withDeadline(iter, deadline, signal)) {
+          for await (const l of withDeadline(iter, deadlineNow, signal, timeoutMessage)) {
             if (aborted()) return true;
             if (received >= maxPerMarket) return true;
             const key = keyOf(l);

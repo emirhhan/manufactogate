@@ -36,6 +36,8 @@
       .settings { display:grid; grid-template-columns: 1fr auto; gap:6px 12px; align-items:center; padding:8px 0 4px; font-size:12px; }
       .settings select, .settings input[type=text] { height:26px; border:1px solid var(--border); border-radius:6px; background:var(--surface); color:var(--text); font:inherit; font-size:12px; padding:0 6px; }
       .settings input[type=text] { width:170px; }
+      .settings input[type=number] { width:90px; height:26px; border:1px solid var(--border); border-radius:6px; background:var(--surface); color:var(--text); font:inherit; font-size:12px; padding:0 6px; }
+      .settings .hint { color:var(--muted); font-size:11px; }
       footer { padding:8px 12px; border-top:1px solid var(--border); color:var(--muted); font-size:12px; }
       #msg { padding:0 12px 8px; color:var(--muted); font-size:12px; min-height:16px; white-space:pre-line; }
       .hidden { display:none; }
@@ -72,6 +74,21 @@
         <input type="checkbox" id="overlay" />
         <label for="appOrigin">Uygulama adresi</label>
         <input type="text" id="appOrigin" spellcheck="false" />
+      </div>
+    </details>
+    <details>
+      <summary>Pazar ayarları (hız sınırı, karşılaştırma kutusu)</summary>
+      <div class="settings">
+        <label for="rlMarket">Pazar</label>
+        <select id="rlMarket"></select>
+        <label for="rlInterval">İki sekme arası en az (sn)</label>
+        <input type="number" id="rlInterval" min="0" max="600" step="1" />
+        <label for="rlPerHour">Saatte en çok istek</label>
+        <input type="number" id="rlPerHour" min="1" max="10000" step="1" />
+        <label for="overlaySite">Bu pazarda karşılaştırma kutusu</label>
+        <input type="checkbox" id="overlaySite" />
+        <span id="rlDefault" class="hint"></span>
+        <button class="link" id="rlReset" type="button">Varsayılana dön</button>
       </div>
     </details>
     <footer>Aramalar kendi oturumunla, arka planda açılan sekmelerde çalışır. <a id="appLink" href="http://localhost:5173" target="_blank" rel="noreferrer">Uygulamayı aç ↗</a></footer>

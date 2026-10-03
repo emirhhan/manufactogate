@@ -1,5 +1,5 @@
 import type { HealthResult, MarketId, SessionState } from "@manufactogate/core";
-import type { ExtToWeb, WebToExt } from "@manufactogate/adapters";
+import type { ExtToWeb, RunStage as ProtocolRunStage, WebToExt } from "@manufactogate/adapters";
 
 /**
  * Shared helpers and types for the extension's module contexts (background, popup).
@@ -57,6 +57,9 @@ export const MARKET_HOSTS: Partial<Record<MarketId, { host: string; loginCookie?
   "id-shopee": { host: "shopee.co.id", loginCookie: "SPC_U" },
 };
 
+/** Local origins the app may run on (vite dev 5173, vite preview 4173); must match manifest.json. */
+export const APP_ORIGIN_PATTERNS: readonly string[] = ["http://localhost:5173/*", "http://127.0.0.1:5173/*", "http://localhost:4173/*", "http://127.0.0.1:4173/*"];
+
 /** Bare host for a market: the stored heuristic host, else the first declared host without its wildcard. */
 export function marketHost(id: MarketId, hosts: string[]): string {
   return MARKET_HOSTS[id]?.host ?? (hosts[0] ?? "").replace(/^\*\./, "");
@@ -75,8 +78,10 @@ export interface Settings {
   tempo: number;
   /** Per-market overrides for the rate limit. */
   rateLimit: Partial<Record<MarketId, { minIntervalMs?: number; maxPerHour?: number }>>;
-  /** Show the overlay button on market product pages. */
+  /** Show the overlay button on market product pages (global switch). */
   overlay: boolean;
+  /** Per-site overlay switch keyed by bare market host ("trendyol.com"); missing means on. */
+  overlaySites: Partial<Record<string, boolean>>;
   /** Show a system notification when a market needs the user (captcha, login). */
   notifications: boolean;
 }
@@ -89,8 +94,40 @@ export const DEFAULT_SETTINGS: Settings = {
   tempo: 1,
   rateLimit: {},
   overlay: true,
+  overlaySites: {},
   notifications: true,
 };
+
+/** Sanitises a per-market rate-limit override: positive finite numbers only, empty entries dropped. */
+export function normalizeRateLimit(raw: unknown): Settings["rateLimit"] {
+  const out: Settings["rateLimit"] = {};
+  if (!raw || typeof raw !== "object") return out;
+  for (const [market, v] of Object.entries(raw as Record<string, unknown>)) {
+    if (!v || typeof v !== "object") continue;
+    const o = v as { minIntervalMs?: unknown; maxPerHour?: unknown };
+    const entry: { minIntervalMs?: number; maxPerHour?: number } = {};
+    if (typeof o.minIntervalMs === "number" && Number.isFinite(o.minIntervalMs) && o.minIntervalMs >= 0) entry.minIntervalMs = Math.min(600000, Math.round(o.minIntervalMs));
+    if (typeof o.maxPerHour === "number" && Number.isFinite(o.maxPerHour) && o.maxPerHour >= 1) entry.maxPerHour = Math.min(10000, Math.round(o.maxPerHour));
+    if (Object.keys(entry).length) out[market as MarketId] = entry;
+  }
+  return out;
+}
+
+/** Sanitises per-site overlay switches: only explicit `false` entries are kept (on is the default). */
+export function normalizeOverlaySites(raw: unknown): Settings["overlaySites"] {
+  const out: Settings["overlaySites"] = {};
+  if (!raw || typeof raw !== "object") return out;
+  for (const [host, v] of Object.entries(raw as Record<string, unknown>)) if (v === false && /^[a-z0-9.-]+$/i.test(host)) out[host.toLowerCase()] = false;
+  return out;
+}
+
+/** Whether the overlay may mount on `hostname` (global switch and per-site switches). Pure. */
+export function overlayAllowed(hostname: string, settings: Pick<Settings, "overlay" | "overlaySites">): boolean {
+  if (!settings.overlay) return false;
+  const h = hostname.toLowerCase();
+  for (const [site, on] of Object.entries(settings.overlaySites)) if (on === false && hostMatches(h, site)) return false;
+  return true;
+}
 
 export function normalizeSettings(raw: unknown): Settings {
   const r = (raw && typeof raw === "object" ? raw : {}) as Partial<Settings>;
@@ -104,8 +141,9 @@ export function normalizeSettings(raw: unknown): Settings {
     captchaWaitMs: num(r.captchaWaitMs, DEFAULT_SETTINGS.captchaWaitMs, 0, 600000),
     appOrigin: typeof r.appOrigin === "string" && /^https?:\/\//.test(r.appOrigin) ? r.appOrigin.replace(/\/$/, "") : DEFAULT_SETTINGS.appOrigin,
     tempo: [1, 2, 4].includes(r.tempo as number) ? (r.tempo as number) : DEFAULT_SETTINGS.tempo,
-    rateLimit: r.rateLimit && typeof r.rateLimit === "object" ? r.rateLimit : {},
+    rateLimit: normalizeRateLimit(r.rateLimit),
     overlay: typeof r.overlay === "boolean" ? r.overlay : DEFAULT_SETTINGS.overlay,
+    overlaySites: normalizeOverlaySites(r.overlaySites),
     notifications: typeof r.notifications === "boolean" ? r.notifications : DEFAULT_SETTINGS.notifications,
   };
 }
@@ -126,8 +164,8 @@ export async function saveSettings(patch: Partial<Settings>): Promise<Settings> 
   return next;
 }
 
-/** Stage of a request as the runner reports it (popup status and web progress envelopes). */
-export type RunStage = "queued" | "opening" | "loading" | "typing" | "image" | "settling" | "captcha" | "done";
+/** Stage of a request as the runner reports it (popup status and web progress envelopes); the protocol owns the vocabulary. */
+export type RunStage = ProtocolRunStage;
 
 export interface RunnerStatus {
   version: string;
@@ -145,7 +183,6 @@ export type CooldownKind = "captcha" | "logged-out" | "rate" | "network";
 /** Popup/overlay-only requests that travel over chrome.runtime.sendMessage or the port, never the web page. */
 export type PopupMsg =
   | { type: "status" }
-  | { type: "cancel" }
   | { type: "retry"; market: MarketId }
   | { type: "closeTabs" }
   | { type: "openLogins" }
