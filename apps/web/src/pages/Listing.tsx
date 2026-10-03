@@ -88,8 +88,10 @@ export function Listing() {
       const scored = list.map((l) => ({ l, r: relevance(listing.title, l) })).sort((a, b) => b.r - a.r || minTry(a.l) - minTry(b.l));
       const strong = scored.filter((x) => x.r >= 0.5);
       const weak = scored.filter((x) => x.r < 0.5);
+      // "En ucuz ilan" only ever comes from a near match; a market with no near match shows "—" rather than
+      // its cheapest unrelated item.
       const pool = strong.length ? strong : scored.slice(0, 5);
-      const best = [...pool].sort((a, b) => minTry(a.l) - minTry(b.l))[0]?.l;
+      const best = strong.length ? [...strong].sort((a, b) => minTry(a.l) - minTry(b.l))[0]?.l : undefined;
       return { market: m as MarketId, count: list.length, best, top: pool.slice(0, 8).map((x) => x.l), weak: weak.map((x) => x.l), strongCount: strong.length };
     });
   }, [comparing, s.listings, market, id, listing]);
