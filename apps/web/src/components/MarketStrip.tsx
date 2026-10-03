@@ -11,7 +11,7 @@ const ERROR_TEXT: Record<string, { title: string; hint: string }> = {
   Network: { title: "Ağ hatası", hint: "Bağlantıyı kontrol edip yeniden dene." },
 };
 
-export function MarketStrip({ markets, onRetry }: { markets: Record<string, MarketStatus>; onRetry: (m: MarketId) => void }) {
+export function MarketStrip({ markets, notes = {}, onRetry }: { markets: Record<string, MarketStatus>; notes?: Record<string, string>; onRetry: (m: MarketId) => void }) {
   const reg = getRegistry();
   return (
     <div className="flex flex-wrap gap-2">
@@ -30,12 +30,13 @@ export function MarketStrip({ markets, onRetry }: { markets: Record<string, Mark
         return (
           <div
             key={id}
-            title={st.state === "error" ? `${ERROR_TEXT[st.type]?.hint ?? ""}\n${st.message}` : undefined}
+            title={[st.state === "error" ? `${ERROR_TEXT[st.type]?.hint ?? ""}\n${st.message}` : "", notes[id] ?? ""].filter(Boolean).join("\n") || undefined}
             className={cn("flex items-center gap-2 rounded-md border border-border bg-surface px-2.5 py-1.5 text-[12px]", st.state === "error" && "border-danger/40")}
           >
             <span className={cn("inline-block h-2 w-2 rounded-full", dot)} />
             <span className="font-medium">{name}</span>
             <span className="text-muted tnum">{label}</span>
+            {notes[id] && <span className="text-[11px] text-warning" title={notes[id]}>ⓘ</span>}
             {st.state === "error" && (
               <>
                 {(st.type === "LoggedOut" || st.type === "Captcha") && (

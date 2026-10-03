@@ -13,15 +13,21 @@ function sleep(ms: number) {
   return new Promise((r) => setTimeout(r, ms));
 }
 
-async function waitForLoad(tabId: number, timeoutMs: number): Promise<void> {
+/** Waits for the tab to finish loading; heavy market pages may never report "complete", so after
+ *  `softMs` we accept an interactive document and continue. */
+async function waitForLoad(tabId: number, timeoutMs: number, softMs = 6000): Promise<void> {
   const t0 = Date.now();
   while (Date.now() - t0 < timeoutMs) {
     const tab = await chrome.tabs.get(tabId).catch(() => null);
-    if (!tab) throw new Error("tab closed");
+    if (!tab) throw new Error("sekme kapandı");
     if (tab.status === "complete") return;
+    if (Date.now() - t0 > softMs) {
+      const ready = await exec<string>(tabId, (() => document.readyState) as never).catch(() => "");
+      if (ready === "interactive" || ready === "complete") return;
+    }
     await sleep(150);
   }
-  throw new Error("page load timeout");
+  // Proceed anyway; extraction will report what it finds.
 }
 
 async function exec<T>(tabId: number, func: (...args: never[]) => T, args: unknown[] = []): Promise<T> {
@@ -55,9 +61,11 @@ export async function runExtract(req: ExtractRequest): Promise<ExtractResult | E
     try {
       const tab = await chrome.tabs.create({ url: req.url, active: false });
       tabId = tab.id;
-      if (tabId === undefined) return failure("Network", "tab could not be created");
+      if (tabId === undefined) return failure("Network", "sekme açılamadı");
       await waitForLoad(tabId, Math.min(timeoutMs, 20000));
-      await chrome.scripting.executeScript({ target: { tabId }, files: ["extract.js"] });
+      await chrome.scripting.executeScript({ target: { tabId }, files: ["extract.js"] }).catch((e: unknown) => {
+        throw new Error(`çıkarma betiği enjekte edilemedi: ${e instanceof Error ? e.message : String(e)}`);
+      });
 
       const settle = async (): Promise<ExtractResult | ExtractFailure> => {
         let last = "";
@@ -91,19 +99,25 @@ export async function runExtract(req: ExtractRequest): Promise<ExtractResult | E
       };
 
       if (req.imageDataUrl) {
-        // Give the page a moment to mount its upload widget, then feed the file.
-        await sleep(800);
-        const r = await exec<string>(tabId, ((m: MarketId, d: string) => (window as unknown as { __mgx: { setImage: (m: MarketId, d: string) => string } }).__mgx.setImage(m, d)) as never, [market, req.imageDataUrl]);
-        if (r !== "ok") return failure("SelectorBroken", "görsel yükleme girişi bulunamadı", req.url);
-        await sleep(1500);
-        // After upload the page usually navigates or re-renders; re-inject if the world was reset.
-        await waitForLoad(tabId, 10000).catch(() => undefined);
+        // The upload widget mounts late on these pages: retry the file input for a few seconds.
+        let r = "no-input";
+        for (let i = 0; i < 8 && r !== "ok"; i++) {
+          await sleep(700);
+          r = await exec<string>(tabId, ((m: MarketId, d: string) => (window as unknown as { __mgx: { setImage: (m: MarketId, d: string) => string } }).__mgx.setImage(m, d)) as never, [market, req.imageDataUrl]).catch(() => "no-input");
+        }
+        if (r !== "ok") {
+          const current = await chrome.tabs.get(tabId).catch(() => null);
+          return failure("SelectorBroken", "görsel yükleme girişi bulunamadı", current?.url ?? req.url);
+        }
+        await sleep(2000);
+        // After upload the page navigates or re-renders; re-inject the extract bundle.
+        await waitForLoad(tabId, 12000).catch(() => undefined);
         await chrome.scripting.executeScript({ target: { tabId }, files: ["extract.js"] }).catch(() => undefined);
       }
       return await settle();
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
-      return failure(/timeout/.test(msg) ? "Network" : "Network", msg, req.url);
+      return failure("Network", `${req.kind}: ${msg}`, req.url);
     } finally {
       if (tabId !== undefined && !keepTab) void chrome.tabs.remove(tabId).catch(() => undefined);
     }

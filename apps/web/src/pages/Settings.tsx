@@ -126,6 +126,32 @@ export function Settings() {
       </section>
 
       <section className="mt-6">
+        <h2 className="mb-2 text-[12px] font-medium uppercase tracking-wide text-muted">Maliyet varsayımları</h2>
+        <Card className="grid gap-3 p-4 text-[13px] sm:grid-cols-2">
+          <label className="flex items-center justify-between gap-3">
+            <span>Kur · 1 CNY = ? TRY</span>
+            <input type="number" step="0.01" value={s.cost.fxCnyTry} onChange={(e) => s.setCost({ fxCnyTry: Number(e.target.value) || 0 })} className="h-8 w-28 rounded-md border border-border bg-bg px-2 text-right tnum outline-none focus:border-accent" />
+          </label>
+          <label className="flex items-center justify-between gap-3">
+            <span>Varsayılan ürün ağırlığı (kg)</span>
+            <input type="number" step="0.05" value={s.cost.defaultWeightKg} onChange={(e) => s.setCost({ defaultWeightKg: Number(e.target.value) || 0 })} className="h-8 w-28 rounded-md border border-border bg-bg px-2 text-right tnum outline-none focus:border-accent" />
+          </label>
+          <label className="flex items-center justify-between gap-3">
+            <span>Kargo yöntemi</span>
+            <select value={s.cost.shippingKey} onChange={(e) => s.setCost({ shippingKey: e.target.value })} className="h-8 rounded-md border border-border bg-surface px-2">
+              {(COUNTRY_PROFILES[s.targetCountry]?.shipping ?? []).map((o) => (
+                <option key={o.key} value={o.key}>{o.label} · {o.transitDays[0]}-{o.transitDays[1]} gün</option>
+              ))}
+            </select>
+          </label>
+          <label className="flex items-center justify-between gap-3">
+            <span>Reklam ve iade payı (satış fiyatının %)</span>
+            <input type="number" step="1" value={Math.round(s.cost.overheadRate * 100)} onChange={(e) => s.setCost({ overheadRate: (Number(e.target.value) || 0) / 100 })} className="h-8 w-28 rounded-md border border-border bg-bg px-2 text-right tnum outline-none focus:border-accent" />
+          </label>
+        </Card>
+      </section>
+
+      <section className="mt-6">
         <h2 className="mb-2 text-[12px] font-medium uppercase tracking-wide text-muted">Veri</h2>
         <p className="text-[13px] text-muted">Tüm veriler bu tarayıcıda saklanır. Sunucuya hiçbir şey gönderilmez.</p>
       </section>

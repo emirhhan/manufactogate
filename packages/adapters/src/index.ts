@@ -8,6 +8,7 @@ export * from "./registry";
 export * from "./dom";
 export * from "./runtime";
 export * from "./real";
+export * from "./translate";
 export { def1688, extractor1688, LINK_1688 } from "./cn-1688";
 export { defTaobao, extractorTaobao, LINK_TAOBAO } from "./cn-taobao";
 export { defPinduoduo, extractorPinduoduo, LINK_PDD } from "./cn-pinduoduo";

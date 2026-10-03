@@ -5,6 +5,7 @@ import { ClusterCard } from "@/components/ClusterCard";
 import { MarketStrip } from "@/components/MarketStrip";
 import { ResultCard } from "@/components/ResultCard";
 import { Button, Card, Empty, cn } from "@/components/ui";
+import { download, listingsToCsv } from "@/lib/export";
 import { toTry } from "@/lib/fx";
 import { getRegistry } from "@/lib/registry";
 import { useSearch } from "@/store/search";
@@ -86,6 +87,9 @@ export function Results() {
           </div>
         </div>
         <div className="ml-auto flex items-center gap-2">
+          <Button onClick={() => download(`manufactogate-${Date.now()}.csv`, listingsToCsv(visible, (m) => reg.get(m as MarketId)?.meta.name ?? m))} disabled={visible.length === 0}>
+            CSV indir
+          </Button>
           {s.running ? (
             <Button onClick={s.cancel}>Durdur</Button>
           ) : (
@@ -97,7 +101,7 @@ export function Results() {
       </div>
 
       <div className="mt-3">
-        <MarketStrip markets={s.markets} onRetry={(m) => void s.retryMarket(m)} />
+        <MarketStrip markets={s.markets} notes={s.notes} onRetry={(m) => void s.retryMarket(m)} />
       </div>
 
       {s.clusters.length > 0 && (

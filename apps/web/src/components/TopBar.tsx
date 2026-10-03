@@ -18,6 +18,8 @@ export function TopBar({ extension, dataSource }: { extension: { installed: bool
             ["/", "Ürünler"],
             ["/categories", "Kategoriler"],
             ["/history", "Aramalarım"],
+            ["/projects", "Projeler"],
+            ["/watchlist", "İzleme"],
             ["/settings", "Ayarlar"],
           ].map(([to, label]) => (
             <NavLink

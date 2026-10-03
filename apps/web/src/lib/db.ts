@@ -28,11 +28,44 @@ export interface SettingsRecord {
   value: unknown;
 }
 
+export interface ProjectRecord {
+  id: string;
+  name: string;
+  notes: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** A listing saved into a project with the user's note. */
+export interface ProjectItemRecord {
+  key: string; // `${projectId}:${market}:${listingId}`
+  projectId: string;
+  listingKey: string; // `${market}:${listingId}`
+  note: string;
+  addedAt: string;
+}
+
+export interface WatchRecord {
+  listingKey: string;
+  market: string;
+  listingId: string;
+  title: string;
+  image?: string;
+  currency: string;
+  firstPrice: number;
+  lastPrice: number;
+  lastCheckedAt: string;
+  history: { at: string; price: number }[];
+}
+
 class ManufactogateDb extends Dexie {
   searches!: EntityTable<SearchRecord, "id">;
   listings!: EntityTable<ListingRecord, "key">;
   clusters!: EntityTable<ClusterRecord, "key">;
   settings!: EntityTable<SettingsRecord, "key">;
+  projects!: EntityTable<ProjectRecord, "id">;
+  projectItems!: EntityTable<ProjectItemRecord, "key">;
+  watches!: EntityTable<WatchRecord, "listingKey">;
 
   constructor() {
     super("manufactogate");
@@ -41,6 +74,15 @@ class ManufactogateDb extends Dexie {
       listings: "key, searchId, market",
       clusters: "key, searchId",
       settings: "key",
+    });
+    this.version(2).stores({
+      searches: "id, startedAt",
+      listings: "key, searchId, market",
+      clusters: "key, searchId",
+      settings: "key",
+      projects: "id, updatedAt",
+      projectItems: "key, projectId, listingKey",
+      watches: "listingKey, lastCheckedAt",
     });
   }
 }

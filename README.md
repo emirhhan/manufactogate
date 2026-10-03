@@ -24,10 +24,11 @@ eklenti iskeleti. Web uygulaması e-ticaret görünümünde bir ürün feed'i su
 430 kategori, 3.800'den fazla ürün, sayfa başına 30 ürün, kategori ve metin araması, ürün
 sayfasında fiyat zinciri ve Türkiye'ye indirilmiş maliyet.
 
-Sprint 1: dört pazar için gerçek adapter'lar yazıldı (1688, Taobao, Pinduoduo, Trendyol).
-Aramalar eklenti üzerinden kullanıcının kendi oturumuyla, arka planda açılan sekmelerde
-çalışır; gömülü JSON öncelikli, DOM kart sezgisi yedekli. Seçiciler henüz canlı sayfalarla
-kalibre edilmedi; süreç [docs/CALIBRATION.md](docs/CALIBRATION.md) içinde.
+Sprint 1-4: dört pazar için gerçek adapter'lar (1688, Taobao, Pinduoduo, Trendyol) gerçek
+sayfalarla kalibre edildi. Aramalar eklenti üzerinden kullanıcının kendi oturumuyla çalışır.
+Gerçek ürün sayfası, pazarlar arası karşılaştırma, Türkiye'ye indirilmiş maliyet, projeler,
+izleme listesi, CSV dışa aktarma ve Türkçe → Çince sorgu yerelleştirme hazır.
+Durum tablosu [docs/ROADMAP.md](docs/ROADMAP.md), kalibrasyon [docs/CALIBRATION.md](docs/CALIBRATION.md).
 
 ## Repo yapısı
 

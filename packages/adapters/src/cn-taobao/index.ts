@@ -1,6 +1,6 @@
 import type { LinkInfo, RawListing, RawListingDetail } from "@manufactogate/core";
 import { BADGES_TAOBAO } from "../badges";
-import { clean, extractCards, get, parseCount, parsePrice, readEmbedded, textOf } from "../dom";
+import { clean, extractCards, extractJsonAfter, get, inlineScriptText, parseCount, parsePrice, readEmbedded, textOf, tryJson } from "../dom";
 import { META_TAOBAO } from "../markets";
 import { detectSession, type PageExtractor, type RealMarketDef, type SearchItem } from "../runtime";
 
@@ -108,6 +108,45 @@ export const extractorTaobao: PageExtractor = {
     }).map((c) => ({ ...c, currency: "CNY" }));
   },
   detail(doc) {
+    // Current item page: inline state with "item", "seller", "skuCore" and "props" objects.
+    const text = inlineScriptText(doc);
+    const item = tryJson<Record<string, unknown>>(extractJsonAfter(text, '"item":'));
+    if (item && typeof item["title"] === "string" && Array.isArray(item["images"])) {
+      const seller = tryJson<Record<string, unknown>>(extractJsonAfter(text, '"seller":')) ?? {};
+      const skuCore = tryJson<Record<string, unknown>>(extractJsonAfter(text, '"skuCore":')) ?? {};
+      const infos = Object.values((get(skuCore, "sku2info") as Record<string, unknown>) ?? {}) as Record<string, unknown>[];
+      const prices = infos
+        .map((i) => parsePrice(String(get(i, "subPrice.priceText") ?? get(i, "price.priceText") ?? "")))
+        .filter((n): n is number => n !== null && n > 0);
+      const price = prices.length ? Math.min(...prices) : null;
+      const props = tryJson<unknown>(extractJsonAfter(text, '"props":'));
+      const attrs: Record<string, string> = {};
+      const walk = (o: unknown) => {
+        if (Array.isArray(o)) o.forEach(walk);
+        else if (o && typeof o === "object") {
+          const r = o as Record<string, unknown>;
+          if (typeof r["name"] === "string" && typeof r["value"] === "string") attrs[r["name"]] = r["value"];
+          else if (typeof r["key"] === "string" && typeof r["value"] === "string") attrs[r["key"]] = r["value"];
+          else Object.values(r).forEach(walk);
+        }
+      };
+      walk(props);
+      const bodyText = doc.body ? textOf(doc.body) : "";
+      const sold = parseCount(String(item["vagueSellCount"] ?? "")) ?? parseCount(/已售\s*([\d.]+万?\+?)/.exec(bodyText)?.[1]);
+      if (price !== null) {
+        return {
+          strategy: "embedded",
+          title: clean(String(item["title"])),
+          price,
+          sold,
+          images: (item["images"] as string[]).filter((u) => typeof u === "string"),
+          shop: clean(String(seller["shopName"] ?? seller["sellerNick"] ?? "")),
+          shopId: String(seller["shopId"] ?? seller["sellerId"] ?? ""),
+          badges: BADGE_WORDS.filter((w) => bodyText.includes(w) || /tmall\.com/.test(doc.location?.href ?? "")),
+          attributes: attrs,
+        };
+      }
+    }
     const body = doc.body?.textContent ?? "";
     const title = clean(doc.querySelector("h1")?.textContent) || clean(doc.querySelector("[class*='ItemTitle'],[class*='mainTitle'],.tb-main-title")?.textContent) || clean(doc.title.replace(/-淘宝网|-tmall\.com.*$/g, ""));
     const priceM = /[¥￥]\s*([\d.]+)/.exec(body);
@@ -164,9 +203,10 @@ export const defTaobao: RealMarketDef = {
       price: { currency: "CNY", tiers: [{ minQty: 1, unitPrice: d["price"] as number }] },
       moq: 1,
       ...(typeof d["sold"] === "number" ? { sold: d["sold"] as number } : {}),
-      ...(d["shop"] ? { supplierName: String(d["shop"]), supplierId: String(d["shop"]) } : {}),
+      ...(d["shop"] ? { supplierName: String(d["shop"]), supplierId: String(d["shopId"] || d["shop"]) } : {}),
       badges: (d["badges"] as string[]) ?? [],
       fetchedAt,
+      ...(d["attributes"] && Object.keys(d["attributes"] as object).length ? { attributes: d["attributes"] as Record<string, string> } : {}),
     };
   },
 };

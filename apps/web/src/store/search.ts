@@ -10,6 +10,7 @@ import {
 } from "@manufactogate/core";
 import { db, type SearchRecord } from "@/lib/db";
 import { browserFingerprinter } from "@/lib/fingerprinter";
+import { localizeQuery } from "@manufactogate/adapters";
 import type { Fingerprinter } from "@manufactogate/core";
 import { getRegistry } from "@/lib/registry";
 
@@ -17,6 +18,7 @@ export interface SearchState {
   current?: SearchRecord;
   input?: SearchInput;
   markets: Record<string, MarketStatus>;
+  notes: Record<string, string>;
   listings: Record<string, RawListing[]>;
   clusters: Cluster[];
   similar: ScoredListing[];
@@ -32,6 +34,7 @@ export interface SearchState {
 
 export const useSearch = create<SearchState>((set, get) => ({
   markets: {},
+  notes: {},
   listings: {},
   clusters: [],
   similar: [],
@@ -50,9 +53,17 @@ export const useSearch = create<SearchState>((set, get) => ({
       clusterCount: 0,
     };
     await db.searches.put(record);
-    set({ current: record, input, markets: {}, listings: {}, clusters: [], similar: [], running: true, abort });
+    set({ current: record, input, markets: {}, notes: {}, listings: {}, clusters: [], similar: [], running: true, abort });
 
     const adapters = marketIds.map((m) => getRegistry().get(m)).filter((a): a is NonNullable<typeof a> => !!a);
+    if (input.kind === "text") {
+      const perMarket: Partial<Record<MarketId, string>> = {};
+      for (const a of adapters) {
+        const q = localizeQuery(input.query, a.meta.language);
+        if (q !== input.query) perMarket[a.id] = q;
+      }
+      if (Object.keys(perMarket).length) input = { ...input, perMarket };
+    }
     const imageMarkets = new Set(input.kind === "image" ? adapters.filter((a) => a.meta.capabilities.imageSearch).map((a) => a.id) : []);
     const fp: Fingerprinter = {
       forQuery: (i) => browserFingerprinter.forQuery(i),
@@ -62,6 +73,7 @@ export const useSearch = create<SearchState>((set, get) => ({
       for await (const ev of runSearch(input, adapters, fp, { signal: abort.signal, maxPerMarket: 40 })) {
         if (abort.signal.aborted) return;
         if (ev.type === "market") set((s) => ({ markets: { ...s.markets, [ev.market]: ev.status } }));
+        else if (ev.type === "note") set((s) => ({ notes: { ...s.notes, [ev.market]: ev.note } }));
         else if (ev.type === "listing") {
           set((s) => ({ listings: { ...s.listings, [ev.market]: [...(s.listings[ev.market] ?? []), ev.listing] } }));
           void db.listings.put({ ...ev.listing, key: `${ev.market}:${ev.listing.id}`, searchId: id });
@@ -105,6 +117,6 @@ export const useSearch = create<SearchState>((set, get) => ({
     for (const l of listings) (byMarket[l.market] ??= []).push(l);
     const markets: Record<string, MarketStatus> = {};
     for (const m of rec.markets) markets[m] = { state: "done", received: byMarket[m]?.length ?? 0, durationMs: 0 };
-    set({ current: rec, input: rec.input, listings: byMarket, clusters: clusters.map((c) => c.cluster), similar: [], markets, running: false });
+    set({ current: rec, input: rec.input, listings: byMarket, clusters: clusters.map((c) => c.cluster), similar: [], markets, notes: {}, running: false });
   },
 }));

@@ -3,13 +3,14 @@ import { Link, useParams } from "react-router-dom";
 import { computeLandedCost, computeMargin, normalizeBadges, type MarketId, type RawListing, type RawListingDetail } from "@manufactogate/core";
 import { BADGE_LABELS_TR } from "@manufactogate/adapters";
 import { getCountryProfile } from "@manufactogate/country-profiles";
+import { ListingActions } from "@/components/ListingActions";
 import { MarketStrip } from "@/components/MarketStrip";
 import { ResultCard } from "@/components/ResultCard";
 import { Badge, Button, Card, cn } from "@/components/ui";
 import { placeholder } from "@/lib/catalog";
 import { db } from "@/lib/db";
 import { money, pct } from "@/lib/format";
-import { FX_TO_TRY, toTry } from "@/lib/fx";
+import { toTry } from "@/lib/fx";
 import { imageToDataUrl } from "@/lib/images";
 import { getRegistry } from "@/lib/registry";
 import { useSearch } from "@/store/search";
@@ -31,6 +32,7 @@ export function Listing() {
   const [compareId, setCompareId] = useState<string | null>(null);
   const s = useSearch();
   const enabled = useSettings((x) => x.enabledMarkets);
+  const costSettings = useSettings((x) => x.cost);
 
   useEffect(() => {
     let alive = true;
@@ -112,10 +114,11 @@ export function Listing() {
   const qty = listing.price.tiers[1]?.minQty ?? Math.max(listing.moq ?? 1, 100);
   const cost =
     isSource && listing.price.currency === "CNY"
-      ? computeLandedCost(profile, { quantity: qty, tiers: listing.price.tiers, fxRate: FX_TO_TRY["CNY"]!, unitWeightKg: 0.5, shippingKey: "air" })
+      ? computeLandedCost(profile, { quantity: qty, tiers: listing.price.tiers, fxRate: costSettings.fxCnyTry, unitWeightKg: costSettings.defaultWeightKg, shippingKey: costSettings.shippingKey })
       : null;
+  const shippingLabel = profile.shipping.find((o) => o.key === costSettings.shippingKey)?.label ?? costSettings.shippingKey;
   const trendyolBest = others.find((o) => o.market === "tr-trendyol")?.best;
-  const margin = cost && trendyolBest ? computeMargin(profile, cost.perUnit, { sellPrice: minTry(trendyolBest), marketplaceId: "tr-trendyol", overheadRate: 0.08 }) : null;
+  const margin = cost && trendyolBest ? computeMargin(profile, cost.perUnit, { sellPrice: minTry(trendyolBest), marketplaceId: "tr-trendyol", overheadRate: costSettings.overheadRate }) : null;
 
   return (
     <div className="mx-auto max-w-[1440px] px-4 py-6">
@@ -161,7 +164,10 @@ export function Listing() {
         </div>
 
         <div className="min-w-0">
-          <span className={cn("inline-block rounded px-1.5 py-0.5 text-[11px] font-medium text-white", MARKET_TONE[listing.market] ?? "bg-accent")}>{adapter?.meta.name ?? listing.market}</span>
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <span className={cn("inline-block rounded px-1.5 py-0.5 text-[11px] font-medium text-white", MARKET_TONE[listing.market] ?? "bg-accent")}>{adapter?.meta.name ?? listing.market}</span>
+            <ListingActions listing={listing} />
+          </div>
           <h1 className="mt-2 text-xl font-semibold leading-snug tracking-tight">{listing.title}</h1>
           <div className="mt-3 flex items-end gap-4">
             <div>
@@ -220,7 +226,10 @@ export function Listing() {
 
           {cost && (
             <Card className="mt-5 p-4">
-              <div className="text-[11px] font-medium uppercase tracking-wide text-muted">Türkiye'ye indirilmiş maliyet · {qty} adet · hava kargo · 0,5 kg varsayımı</div>
+              <div className="flex items-center justify-between">
+                <div className="text-[11px] font-medium uppercase tracking-wide text-muted">Türkiye'ye indirilmiş maliyet · {qty} adet · {shippingLabel} · {costSettings.defaultWeightKg} kg · kur {costSettings.fxCnyTry}</div>
+                <Link to="/settings" className="text-[11px] text-accent hover:underline">ayarla</Link>
+              </div>
               <div className="mt-2 grid gap-x-6 gap-y-1 text-[13px] sm:grid-cols-2">
                 {cost.lines.map((l) => (
                   <div key={l.key} className="flex justify-between tnum">
@@ -255,7 +264,7 @@ export function Listing() {
             </Link>
           </div>
           <div className="mt-3">
-            <MarketStrip markets={s.markets} onRetry={(m) => void s.retryMarket(m)} />
+            <MarketStrip markets={s.markets} notes={s.notes} onRetry={(m) => void s.retryMarket(m)} />
           </div>
           <div className="mt-4 overflow-hidden rounded-lg border border-border bg-surface">
             <table className="w-full text-[13px]">

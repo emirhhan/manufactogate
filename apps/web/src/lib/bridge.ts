@@ -56,7 +56,7 @@ export async function detectExtension(): Promise<ExtensionInfo> {
 export class ExtensionRunner implements PageRunner {
   async run<T = unknown>(req: ExtractRequest): Promise<ExtractResult<T> | ExtractFailure> {
     try {
-      const r = await sendToExtension<ExtToWeb & { type: "run:result" }>({ type: "run", req }, (req.timeoutMs ?? 25000) + 15000);
+      const r = await sendToExtension<ExtToWeb & { type: "run:result" }>({ type: "run", req }, (req.timeoutMs ?? 25000) + 30000);
       return r.result as ExtractResult<T> | ExtractFailure;
     } catch (e) {
       return { ok: false, error: "Network", message: e instanceof Error ? e.message : String(e) };

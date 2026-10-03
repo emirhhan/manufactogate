@@ -8,6 +8,8 @@ import { Categories } from "@/pages/Categories";
 import { Feed } from "@/pages/Feed";
 import { History } from "@/pages/History";
 import { Listing } from "@/pages/Listing";
+import { Projects } from "@/pages/Projects";
+import { Watchlist } from "@/pages/Watchlist";
 import { Product } from "@/pages/Product";
 import { Results } from "@/pages/Results";
 import { Settings } from "@/pages/Settings";
@@ -45,6 +47,9 @@ export function App() {
         <Route path="/categories" element={<Categories />} />
         <Route path="/p/:id" element={<Product />} />
         <Route path="/l/:market/:id" element={<Listing />} />
+        <Route path="/projects" element={<Projects />} />
+        <Route path="/projects/:id" element={<Projects />} />
+        <Route path="/watchlist" element={<Watchlist />} />
         <Route path="/search/:id" element={<Results />} />
         <Route path="/history" element={<History />} />
         <Route path="/settings" element={<Settings />} />

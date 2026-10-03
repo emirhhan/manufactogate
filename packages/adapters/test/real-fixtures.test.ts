@@ -118,3 +118,21 @@ describe("trendyol live search", () => {
     expect(items.every((i) => i.price !== null && i.price > 0)).toBe(true);
   });
 });
+
+describe("taobao live detail", () => {
+  it("reads item, seller and sku prices from the inline state", async () => {
+    const a = createRealAdapter(REAL_DEF_BY_ID["cn-taobao"]!, {
+      async run(req) {
+        const doc = load("cn-taobao", "real-detail", req.url);
+        return { ok: true, data: { session: X("cn-taobao").session(doc), strategy: "embedded", detail: X("cn-taobao").detail!(doc) } as never, finalUrl: req.url, tookMs: 1 };
+      },
+    });
+    const d = await a.fetchListing("1046610876030");
+    expect(d.title).toContain("KASK");
+    expect(d.price.tiers[0]!.unitPrice).toBe(49);
+    expect(d.sold).toBe(600);
+    expect(d.images).toHaveLength(5);
+    expect(d.supplierName).toBe("KASK运动户外旗舰店");
+    expect(d.supplierId).toBe("197944619");
+  });
+});

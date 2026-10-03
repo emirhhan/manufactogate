@@ -21,6 +21,26 @@
 - Kalan: canlı sayfalardan fixture alıp seçicileri doğrulamak (docs/CALIBRATION.md),
   tarayıcıda CLIP embedding.
 
+## Durum (2026-10-03)
+
+| Sprint | Kapsam | Durum |
+|---|---|---|
+| 0 | Monorepo, çekirdek, sahte adapter, web ve eklenti iskeleti | Tamam |
+| 1 | Gerçek adapter'lar (1688, Taobao, Pinduoduo, Trendyol), eklenti çalıştırıcı | Tamam; dört pazarın arama ve detayı gerçek sayfalarla kalibre edildi |
+| 2 | Ana sayfa araması, gerçek ürün sayfası, pazarlar arası karşılaştırma, görsel arama tabanı | Tamam; görselle arama canlı doğrulama bekliyor |
+| 3 | Projeler, notlar, izleme listesi, CSV dışa aktarma, maliyet varsayımları | Tamam |
+| 4 | Sorgu yerelleştirme (Türkçe → Çince sözlük), görsel arama başarısızlığında başlıkla arama | Tamam |
+| 5 | Tedarikçi zekâsı: fabrika mı aracı mı skoru, üreticiye izleme sıralaması, risk özeti | Sırada |
+| 6 | Kalite: altın veri seti, kalibrasyon, CLIP ile görsel doğrulama, ülke profili düzenleme, LLM çeviri (isteğe bağlı anahtar) | Sırada |
+
+### Bilinen açık noktalar
+
+- Görselle arama (1688 ve Taobao yükleme girişi) canlı sayfada henüz doğrulanmadı; başarısız olursa
+  başlıkla aramaya düşer ve pazar şeridinde ⓘ ile belirtilir.
+- Çeviri sözlüğü kategori adlarına dayanır; sözlük dışı kelimeler Çin pazarlarına olduğu gibi gider.
+- İzleme listesi fiyatları kullanıcı "Fiyatları yenile" dediğinde güncellenir; arka plan alarmı sonraki adım.
+- Pinduoduo arama sayfası ağır anti-bot kontrolüne sahiptir; "doğrulama" görülürse sekme açık bırakılır.
+
 ## Sprint 2 (başladı): Ürün sayfası ve pazarlar arası karşılaştırma
 
 - Ana sayfada büyük arama kutusu (görsel, link, metin).

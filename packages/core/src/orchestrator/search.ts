@@ -12,7 +12,7 @@ import {
 
 export type SearchInput =
   | { kind: "image"; image: ImageInput; title?: string }
-  | { kind: "text"; query: string }
+  | { kind: "text"; query: string; perMarket?: Partial<Record<MarketId, string>> }
   | { kind: "link"; url: string };
 
 export type MarketStatus =
@@ -24,6 +24,7 @@ export type MarketStatus =
 export type SearchEvent =
   | { type: "market"; market: MarketId; status: MarketStatus }
   | { type: "listing"; market: MarketId; listing: RawListing }
+  | { type: "note"; market: MarketId; note: string }
   | { type: "clusters"; clusters: Cluster[]; similar: ScoredListing[] }
   | { type: "finished"; durationMs: number };
 
@@ -80,12 +81,35 @@ export async function* runSearch(
       const so: SearchOptions = {};
       if (opts.maxPerMarket !== undefined) so.maxResults = opts.maxPerMarket;
       if (opts.signal) so.signal = opts.signal;
-      const iter =
+      const textQuery = input.kind === "text" ? (input.perMarket?.[adapter.id] ?? input.query) : input.kind === "image" ? input.title : undefined;
+      const canImage = input.kind === "image" && adapter.meta.capabilities.imageSearch;
+      if (input.kind === "image" && !canImage && !textQuery) {
+        emit({ type: "market", market: adapter.id, status: { state: "done", received: 0, durationMs: Date.now() - t0 } });
+        return;
+      }
+      let iter: AsyncIterable<RawListing> =
         input.kind === "image"
-          ? adapter.searchByImage(input.image, so)
+          ? canImage
+            ? adapter.searchByImage(input.image, so)
+            : adapter.searchByText(textQuery!, so)
           : input.kind === "text"
-            ? adapter.searchByText(input.query, so)
+            ? adapter.searchByText(textQuery!, so)
             : linkSearch(adapter, input.url);
+      if (input.kind === "image" && !canImage) emit({ type: "note", market: adapter.id, note: "görselle arama yok, başlıkla arandı" });
+      // Image search can fail on the market's upload widget; fall back to a title search when we have one.
+      if (canImage && textQuery) {
+        const primary = iter;
+        iter = (async function* () {
+          try {
+            for await (const l of primary) yield l;
+          } catch (err) {
+            const e = err as AdapterError;
+            if (e instanceof AdapterError && (e.type === "LoggedOut" || e.type === "Captcha")) throw err;
+            emit({ type: "note", market: adapter.id, note: `görselle arama başarısız (${e instanceof Error ? e.message : String(e)}), başlıkla arandı` });
+            for await (const l of adapter.searchByText(textQuery, so)) yield l;
+          }
+        })();
+      }
       for await (const listing of iter) {
         if (opts.signal?.aborted) break;
         received++;
