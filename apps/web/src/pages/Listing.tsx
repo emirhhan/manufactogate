@@ -66,7 +66,9 @@ export function Listing() {
 
   const compare = async () => {
     if (!listing || !market) return;
-    const markets = [...new Set([...reg.all().map((a) => a.id), ...enabled, market])];
+    // Wave-1 markets always, plus whatever the user enabled (beta markets opt in from Settings), plus the source market.
+    const wave1 = reg.all().filter((a) => !a.meta.version.includes("beta")).map((a) => a.id);
+    const markets = [...new Set([...wave1, ...enabled, market])];
     const first = listing.images[0];
     const dataUrl = first ? await imageToDataUrl(first) : null;
     const input = dataUrl
@@ -319,18 +321,25 @@ export function Listing() {
           {others.some((o) => o.top.length) && (
             <div className="mt-4 space-y-5">
               {others.filter((o) => o.top.length).map((o) => (
-                <div key={o.market}>
-                  <div className="mb-2 flex items-center gap-3">
+                <details key={o.market} open={!reg.get(o.market)?.meta.version.includes("beta")} className="group">
+                  <summary className="mb-2 flex cursor-pointer list-none items-center gap-3">
                     <div className="text-[12px] font-medium uppercase tracking-wide text-muted">
+                      <span className="mr-1 inline-block transition-transform group-open:rotate-90">▸</span>
                       {reg.get(o.market)?.meta.name} · en yakın {o.top.length}
                     </div>
                     {o.weak.length > 0 && (
-                      <button onClick={() => setShowFiltered((v) => ({ ...v, [o.market]: !v[o.market] }))} className="text-[12px] text-accent hover:underline">
+                      <button
+                        onClick={(e) => {
+                          e.preventDefault();
+                          setShowFiltered((v) => ({ ...v, [o.market]: !v[o.market] }));
+                        }}
+                        className="text-[12px] text-accent hover:underline"
+                      >
                         {showFiltered[o.market] ? "Filtrelenenleri gizle" : `Filtrelenenleri göster (${o.weak.length})`}
                       </button>
                     )}
-                  </div>
-                  <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                  </summary>
+                  <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 xl:grid-cols-6">
                     {o.top.map((l) => (
                       <ResultCard key={`${l.market}:${l.id}`} listing={l} confidence={confidence.get(`${l.market}:${l.id}`)} />
                     ))}
@@ -342,7 +351,7 @@ export function Listing() {
                       ))}
                     </div>
                   )}
-                </div>
+                </details>
               ))}
             </div>
           )}
