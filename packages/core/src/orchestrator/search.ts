@@ -550,7 +550,10 @@ export async function* runSearch(
           }
         };
         if (effective.kind === "image") {
-          const canImage = opts.capabilityOverrides?.[adapter.id]?.imageSearch ?? adapter.meta.capabilities.imageSearch;
+          // A remembered failure only reroutes to the title ladder; with no title there is nothing to
+          // reroute to, so a market that can search by image still tries it.
+          const override = ladder.length ? opts.capabilityOverrides?.[adapter.id]?.imageSearch : undefined;
+          const canImage = override ?? adapter.meta.capabilities.imageSearch;
           if (canImage) {
             let failed = false;
             try {

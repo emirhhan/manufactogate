@@ -165,6 +165,13 @@ describe("runSearch", () => {
     expect(notes(events, "cn-b")[0]!.note).toContain("çalışmıyor");
   });
 
+  it("(c3) a remembered image failure does not block a photo-only search", async () => {
+    const memo = fakeAdapter({ id: "cn-b", imageSearch: true, imageResults: [mk("cn-b", "9", "img")] });
+    const events = await collect(runSearch({ kind: "image", image: { dataUrl: "data:," } }, [memo], fp, { ...quick, capabilityOverrides: { "cn-b": { imageSearch: false } } }));
+    expect(memo.calls).toEqual(["image"]);
+    expect(statuses(events, "cn-b").at(-1)).toMatchObject({ state: "done", received: 1 });
+  });
+
   it("(d) abort ends every market as cancelled and finishes within 50 ms", async () => {
     const slow = fakeAdapter({ id: "cn-a", results: { q: [mk("cn-a", "1", "x"), mk("cn-a", "2", "y"), mk("cn-a", "3", "z")] }, delayMs: 30 });
     const hung = fakeAdapter({ id: "cn-b", hang: true });

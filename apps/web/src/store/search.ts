@@ -254,7 +254,7 @@ function wrapFingerprinter(sess: Session, imageMarkets: Set<string>): Fingerprin
 function imageMarketsFor(input: SearchInput, adapters: Pick<MarketAdapter, "id" | "meta">[], memo: CapabilityMemo): Set<string> {
   if (input.kind !== "image") return new Set();
   const overrides = capabilityOverridesFrom(memo);
-  return new Set(adapters.filter((a) => overrides[a.id]?.imageSearch ?? a.meta.capabilities.imageSearch).map((a) => a.id));
+  return new Set(adapters.filter((a) => (ladderOf(input, a.id).length ? overrides[a.id]?.imageSearch : undefined) ?? a.meta.capabilities.imageSearch).map((a) => a.id));
 }
 
 /** Buffers listing writes into a few transactions per search instead of one per listing. */
