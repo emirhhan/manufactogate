@@ -7,7 +7,16 @@ import { cachedImageToDataUrl } from "@/lib/images";
  * fetched through the extension (cached, rate-limited) but only once the element is near the viewport,
  * so a grid of 300 cards does not fire 300 extension round-trips at once.
  */
-export function MarketImage({ src, label = "", eager = false, ...rest }: ImgHTMLAttributes<HTMLImageElement> & { src: string | undefined; label?: string; eager?: boolean }) {
+export function MarketImage({
+  src,
+  label = "",
+  eager = false,
+  ...rest
+}: ImgHTMLAttributes<HTMLImageElement> & {
+  src: string | undefined;
+  label?: string;
+  eager?: boolean;
+}) {
   const [url, setUrl] = useState<string>(src ?? placeholder(label));
   const [failed, setFailed] = useState(false);
   const [visible, setVisible] = useState(eager);
@@ -58,6 +67,17 @@ export function MarketImage({ src, label = "", eager = false, ...rest }: ImgHTML
     };
   }, [failed, visible, src, label]);
 
+  const onFail = () => {
+    if (stage.current === "direct" && src && /^https?:/.test(src)) {
+      // Show the placeholder while the proxied copy is on its way (or queued behind other images).
+      setUrl(placeholder(label));
+      setFailed(true);
+    } else if (stage.current !== "placeholder") {
+      stage.current = "placeholder";
+      setUrl(placeholder(label));
+    }
+  };
+
   return (
     <img
       ref={ref}
@@ -65,16 +85,13 @@ export function MarketImage({ src, label = "", eager = false, ...rest }: ImgHTML
       src={url}
       alt={rest.alt ?? ""}
       referrerPolicy="no-referrer"
-      onError={() => {
-        if (stage.current === "direct" && src && /^https?:/.test(src)) {
-          // Show the placeholder while the proxied copy is on its way (or queued behind other images).
-          setUrl(placeholder(label));
-          setFailed(true);
-        } else if (stage.current !== "placeholder") {
-          stage.current = "placeholder";
-          setUrl(placeholder(label));
-        }
+      onLoad={(e) => {
+        // A CDN that refuses a hotlink often answers with a 1×1 pixel instead of an error.
+        const img = e.currentTarget;
+        if (img.naturalWidth > 0 && img.naturalWidth < 8 && img.naturalHeight < 8) onFail();
+        rest.onLoad?.(e);
       }}
+      onError={onFail}
     />
   );
 }

@@ -1,4 +1,5 @@
 import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
+import { suspiciousPrices } from "@/lib/priceCheck";
 import { Link, useParams, useSearchParams } from "react-router-dom";
 import { normalizeBadges, type MarketId, type RawListing } from "@manufactogate/core";
 import { ClusterCard } from "@/components/ClusterCard";
@@ -162,6 +163,8 @@ export function Results() {
     },
     [confidence, relOf],
   );
+
+  const suspect = useMemo(() => suspiciousPrices(all), [all]);
 
   const visible = useMemo(() => {
     let v = f.markets.size ? all.filter((l) => f.markets.has(l.market)) : all;
@@ -513,7 +516,7 @@ export function Results() {
           {visible.length > 0 && (
             <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5 print:hidden">
               {visible.slice(0, limit).map((l) => (
-                <ResultCard key={`${l.market}:${l.id}`} listing={l} confidence={confidence.get(`${l.market}:${l.id}`)} relevance={relOf(l)} highlight={s.current?.sourceKey === `${l.market}:${l.id}`} />
+                <ResultCard key={`${l.market}:${l.id}`} listing={l} confidence={confidence.get(`${l.market}:${l.id}`)} relevance={relOf(l)} priceSuspect={suspect.has(`${l.market}:${l.id}`)} highlight={s.current?.sourceKey === `${l.market}:${l.id}`} />
               ))}
             </div>
           )}
@@ -532,7 +535,7 @@ export function Results() {
               {showSimilar && (
                 <div className="grid grid-cols-2 gap-3 opacity-90 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5">
                   {s.similar.slice(0, 40).map((m) => (
-                    <ResultCard key={`${m.listing.market}:${m.listing.id}`} listing={m.listing} confidence={m.match.score} reason={m.match.reasons.join(" · ")} />
+                    <ResultCard key={`${m.listing.market}:${m.listing.id}`} listing={m.listing} confidence={m.match.score} reason={m.match.reasons.join(" · ")} priceSuspect={suspect.has(`${m.listing.market}:${m.listing.id}`)} />
                   ))}
                 </div>
               )}

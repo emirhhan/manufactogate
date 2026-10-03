@@ -18,10 +18,26 @@ function joinSpacedThousands(t: string): string {
   return cur;
 }
 
-/** "¥12.50", "12.5元", "₺1.299,90", "1,299.00", "12.5-18.9" (first), "¥ 1,2万", "2 325 ₽", "1 299,00 ₽" */
+const NUM = String.raw`\d{1,3}(?:[.,]\d{3})+(?:[.,]\d{1,2})?|\d+(?:[.,]\d{1,2})?`;
+/** Currency written before the amount ("¥45.80", "US $3", "Rp 125.000"). */
+const PREFIX_CURRENCY = new RegExp(String.raw`(?:US\s?\$|R\$|RM|Rp\.?|[¥￥$€£₺₽₩฿₹₫₱])\s*((?:${NUM})(?:\s*(?:万|Lakh|lakh|Cr|Crore|crore))?)`);
+/** Currency written after the amount ("45.8元", "1.299,90 TL", "2 325 ₽"). */
+const SUFFIX_CURRENCY = new RegExp(String.raw`((?:${NUM})\s*(?:万)?)\s*(?:元|円|TL|₺|₽|руб|€|zł|Kč|đ|₫|บาท)`);
+
+/**
+ * "¥12.50", "12.5元", "₺1.299,90", "1,299.00", "12.5-18.9" (first), "¥ 1,2万", "2 325 ₽", "1 299,00 ₽".
+ * When the text names a currency, the amount next to it wins over other numbers in the label
+ * ("满2件9.5折 ¥45.80" → 45.8, "月销1000+ ¥15" → 15).
+ */
 export function parsePrice(text: string | null | undefined): number | null {
   if (!text) return null;
   const t = joinSpacedThousands(normalizeSpaces(text).replace(/\s+/g, " ").trim());
+  const tagged = PREFIX_CURRENCY.exec(t) ?? SUFFIX_CURRENCY.exec(t);
+  if (tagged && tagged.index > 0) return parseAmount(tagged[1]!);
+  return parseAmount(t);
+}
+
+function parseAmount(t: string): number | null {
   const m = /(\d{1,3}(?:[.,]\d{3})+|\d+)(?:[.,](\d{1,2}))?\s*(万|Lakh|lakh|Cr|Crore|crore)?/.exec(t);
   if (!m) return null;
   let intPart = m[1]!;

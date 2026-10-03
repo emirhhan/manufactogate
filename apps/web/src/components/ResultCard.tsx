@@ -24,6 +24,7 @@ function ResultCardInner({
   relevance,
   highlight = false,
   reason,
+  priceSuspect = false,
 }: {
   listing: RawListing;
   confidence?: number | undefined;
@@ -31,6 +32,8 @@ function ResultCardInner({
   highlight?: boolean;
   /** Short explanation shown as tooltip on the score badge. */
   reason?: string | undefined;
+  /** The price sits far outside this market's other results: probably mis-read, verify on the market. */
+  priceSuspect?: boolean;
 }) {
   const reg = getRegistry();
   const adapter = reg.get(listing.market);
@@ -76,7 +79,14 @@ function ResultCardInner({
         </Link>
         <div className="mt-auto flex items-end justify-between gap-2">
           <div>
-            <div className="text-[15px] font-semibold tnum">{min === null ? "Teklif iste" : money(min, listing.price.currency)}</div>
+            <div className="text-[15px] font-semibold tnum">
+              {min === null ? "Teklif iste" : money(min, listing.price.currency)}
+              {priceSuspect && (
+                <span className="ml-1 text-[12px] text-warning" title="Bu fiyat aynı pazardaki diğer sonuçların çok dışında; yanlış okunmuş olabilir. Pazarda doğrula.">
+                  ⚠
+                </span>
+              )}
+            </div>
             {approx !== null ? (
               <div className="text-[11px] text-muted tnum">≈ {money(approx, disp)}</div>
             ) : min !== null && listing.price.currency !== disp ? (
