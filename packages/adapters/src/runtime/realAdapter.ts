@@ -17,7 +17,7 @@ import {
   type SessionState,
   type SoldPeriod,
 } from "@manufactogate/core";
-import { inlineScriptText, parseCount, visibleText, type CardData } from "../dom";
+import { countryOfPlace, inlineScriptText, parseCount, parsePack, supplierKey, visibleText, type CardData } from "../dom";
 import { TIMING } from "./protocol";
 import type { ExtractFailure, ExtractRequest, ExtractResult, PageExtractor, PageProbe, PageRunner, RunnerOptions } from "./runner";
 
@@ -167,13 +167,37 @@ export function detailUrlFor(def: Pick<RealMarketDef, "id" | "detailUrl" | "deta
 }
 
 const num = (v: unknown): number | undefined => (typeof v === "number" && Number.isFinite(v) ? v : undefined);
+const str = (v: unknown): string | undefined => (typeof v === "string" && v.trim() ? v.trim() : undefined);
+
+/** Supplier info plus the cross-store identity seed (`supplierKey`); core's `ListingSupplierInfo` accepts it structurally. */
+export interface SupplierInfoKeyed extends ListingSupplierInfo {
+  /** Folded company name + country ("cn:深圳市示例电子"), the seed for cross-store supplier identity. */
+  key?: string;
+}
+
+/** Country of a market from its id ("cn-1688" → "cn") unless the def's meta says otherwise. */
+function marketCountry(def: Pick<RealMarketDef, "id"> & { meta?: Pick<MarketMeta, "country"> }): string {
+  return (def.meta?.country ?? def.id.split("-")[0] ?? "").toLowerCase();
+}
+
+/** Merges supplier signals into `out.supplier`, adding the identity key from the supplier name. */
+function applySupplier(def: Pick<RealMarketDef, "id"> & { meta?: Pick<MarketMeta, "country"> }, out: RawListing, extra: ListingSupplierInfo): void {
+  const merged: SupplierInfoKeyed = { ...(out.supplier ?? {}), ...extra };
+  const existingKey = (out.supplier as SupplierInfoKeyed | undefined)?.key;
+  if (!existingKey) {
+    const key = supplierKey({ name: out.supplierName, country: out.shipFrom ?? marketCountry(def) });
+    if (key) merged.key = key;
+  }
+  if (Object.keys(merged).length) out.supplier = merged;
+}
 
 /**
  * Copies every SearchItem/CardData field the market's `toListing` left out onto the listing:
- * review counts, price ranges, price-on-request, title language, sold-counter meaning and the
- * supplier signals a card shows (years, verified, business type, shop rating). Pure.
+ * review counts, price ranges, price-on-request, title language, sold-counter meaning, pack
+ * quantity / unit / ship-from / variant count and the supplier signals a card shows (years,
+ * verified, business type, shop rating, identity key). Pure.
  */
-export function enrichListing(def: Pick<RealMarketDef, "id" | "soldPeriod">, item: SearchItem, l: RawListing): RawListing {
+export function enrichListing(def: Pick<RealMarketDef, "id" | "soldPeriod"> & { meta?: Pick<MarketMeta, "country"> }, item: SearchItem, l: RawListing): RawListing {
   const out: RawListing = { ...l };
   const reviews = num(item.ratingCount);
   if (out.reviewCount === undefined && reviews !== undefined) out.reviewCount = reviews;
@@ -190,6 +214,16 @@ export function enrichListing(def: Pick<RealMarketDef, "id" | "soldPeriod">, ite
     out.soldPeriod = fromReviews ? "reviews" : (def.soldPeriod ?? SOLD_PERIOD[def.id] ?? "total");
   }
   if (out.rating !== undefined && out.ratingMax === undefined && out.rating > 5) out.ratingMax = 100;
+  // Pack / unit / ship-from / variants: the card's own reading first, then the title's pack wording.
+  const pack = item.packQty === undefined || item.packQty === null ? parsePack(out.title) : null;
+  const packQty = num(item.packQty) ?? pack?.qty;
+  if (out.packQty === undefined && packQty !== undefined && packQty > 1) out.packQty = packQty;
+  const unitLabel = str(item.unitLabel) ?? pack?.unit ?? undefined;
+  if (out.unitLabel === undefined && unitLabel) out.unitLabel = unitLabel;
+  const shipFrom = str(item.shipFrom);
+  if (out.shipFrom === undefined && shipFrom) out.shipFrom = shipFrom.toLowerCase();
+  const variants = num(item.variantCount);
+  if (out.variantCount === undefined && variants !== undefined && variants > 0) out.variantCount = variants;
   const supplier: ListingSupplierInfo = {};
   const years = num(item.supplierYears);
   if (years !== undefined && years > 0) supplier.years = years;
@@ -198,7 +232,36 @@ export function enrichListing(def: Pick<RealMarketDef, "id" | "soldPeriod">, ite
   const srating = num(item.supplierRating);
   if (srating !== undefined) supplier.rating = srating;
   if (reviews !== undefined && srating !== undefined) supplier.ratingCount = reviews;
-  if (Object.keys(supplier).length) out.supplier = { ...(out.supplier ?? {}), ...supplier };
+  applySupplier(def, out, supplier);
+  return out;
+}
+
+/**
+ * Same for detail payloads: a market's `detail()` may put `unitLabel`, `variantCount`, `shipFrom`
+ * (country or place name) and `shippingFrom` (place text) on the payload; `toDetail` need not copy
+ * them. The pack quantity is read from the title; the supplier key from the supplier name. Pure.
+ */
+export function enrichDetail(def: Pick<RealMarketDef, "id"> & { meta?: Pick<MarketMeta, "country"> }, payload: Record<string, unknown>, d: RawListingDetail): RawListingDetail {
+  const out: RawListingDetail = { ...d };
+  const unit = str(payload["unitLabel"] ?? payload["unit"]);
+  if (out.unitLabel === undefined && unit && unit.length <= 12 && !/\d/.test(unit)) out.unitLabel = unit;
+  const variants = num(payload["variantCount"]);
+  if (out.variantCount === undefined && variants !== undefined && variants > 0) out.variantCount = variants;
+  const code = str(payload["shipFrom"]);
+  const isCode = !!code && /^[a-z]{2}$/i.test(code);
+  // "shippingFrom" is the place text; a non-code "shipFrom" ("广东 深圳") is a place too.
+  const place = str(payload["shippingFrom"]) ?? (isCode ? undefined : code);
+  if (out.shippingFrom === undefined && place) out.shippingFrom = place;
+  if (out.shipFrom === undefined) {
+    const country = isCode ? code.toLowerCase() : countryOfPlace(place ?? out.location);
+    if (country) out.shipFrom = country;
+  }
+  const pack = out.packQty === undefined ? parsePack(out.title) : null;
+  if (pack) {
+    out.packQty = pack.qty;
+    if (out.unitLabel === undefined && pack.unit) out.unitLabel = pack.unit;
+  }
+  applySupplier(def, out, {});
   return out;
 }
 
@@ -363,8 +426,9 @@ export function createRealAdapter(def: RealMarketDef, runner: PageRunner): Marke
       const r = await runner.run<DetailPayload>({ market: def.id, kind: "detail", url });
       if (!r.ok) fail(def, r);
       assertSession(def, r.data.session, r.finalUrl);
-      const d = r.data.detail && def.toDetail(r.data.detail, id, now());
-      if (!d) throw new AdapterError("SelectorBroken", def.id, `detail not parsed on ${r.finalUrl}`);
+      const parsed = r.data.detail && def.toDetail(r.data.detail, id, now());
+      if (!parsed) throw new AdapterError("SelectorBroken", def.id, `detail not parsed on ${r.finalUrl}`);
+      const d = enrichDetail(def, r.data.detail!, parsed);
       // A seller-specific page was asked for: keep that URL unless the page itself named the seller.
       if (url !== def.detailUrl(id) && d.url === def.detailUrl(id)) d.url = url;
       return d;

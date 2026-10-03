@@ -1,3 +1,4 @@
+import { parsePack, parseShipFrom, parseUnitLabel, parseVariantCount } from "./fields";
 import { absUrl, clean, normalizeSpaces, parseCount, parseMoney, parsePrice } from "./text";
 
 /**
@@ -45,6 +46,10 @@ export interface CardSpec {
   titlePrefixes?: string[];
   /** Drops a card before fields are read (e.g. sidebar promo tiles). */
   cardFilter?: (card: Element, text: string) => boolean;
+  /** Selectors for the "ships from" text when the market renders it in a dedicated element. */
+  shipFromSelectors?: string[];
+  /** Selectors for the variant/colour count element ("5 colors", "+3 renk"). */
+  variantSelectors?: string[];
 }
 
 export interface CardData {
@@ -66,6 +71,14 @@ export interface CardData {
   rating?: number | null;
   ratingCount?: number | null;
   supplierYears?: number | null;
+  /** Units the listed price covers when the card describes a pack ("2件装", "Set of 4", "10 adet"). */
+  packQty?: number | null;
+  /** Unit the price or MOQ is quoted per (件, 套, 个, pcs, pair, adet, kg). */
+  unitLabel?: string | null;
+  /** ISO alpha-2 country the item ships from, when the card says so ("Ships from China", "发货地 浙江"). */
+  shipFrom?: string | null;
+  /** Number of variants the card advertises ("5 colors", "+3 renk"). */
+  variantCount?: number | null;
   /** Full card text, for debugging and secondary parsing. Empty for embedded (JSON) items. */
   text: string;
 }
@@ -369,6 +382,12 @@ export function extractCards(doc: Document, spec: CardSpec, base = doc.location?
     const yearsM = spec.years ? spec.years.exec(text) : null;
     const ratingCountM = spec.ratingCount ? spec.ratingCount.exec(text) : null;
 
+    // Pack, unit, ship-from and variant count: the title first (pack wording), then the whole card text.
+    const pack = parsePack(title) ?? parsePack(text);
+    const unitLabel = parseUnitLabel(text) ?? pack?.unit ?? null;
+    const shipFrom = parseShipFrom(selectorText(card, spec.shipFromSelectors) ?? "") ?? parseShipFrom(text);
+    const variantCount = parseVariantCount(selectorText(card, spec.variantSelectors) ?? "") ?? parseVariantCount(text);
+
     out.push({
       id,
       url: absUrl(first.getAttribute("href")!, base),
@@ -386,6 +405,10 @@ export function extractCards(doc: Document, spec: CardSpec, base = doc.location?
       rating: rating !== null && rating >= 0 && rating <= 5 ? rating : null,
       ratingCount: ratingCountM ? parseCount(ratingCountM[1] ?? ratingCountM[0]) : null,
       supplierYears: yearsM ? Number(yearsM[1]) : null,
+      packQty: pack?.qty ?? null,
+      unitLabel,
+      shipFrom,
+      variantCount,
       text,
     });
   }

@@ -1,5 +1,5 @@
 import { BADGES_B2B, BADGES_RETAIL } from "../badges";
-import { absUrl, clean, extractJsonAfter, get, parseMoney, parsePrice, readJsonScript, readNextFlight, tryJson } from "../dom";
+import { absUrl, clean, extractJsonAfter, get, normalizeUnit, parseMoney, parsePrice, readJsonScript, readNextFlight, tryJson } from "../dom";
 import type { RealMarketDef, SearchItem } from "../runtime";
 import { amazonDef } from "../wave2/amazon";
 import { makeDef } from "../wave2/generic";
@@ -90,6 +90,8 @@ export function indiamartEmbedded(doc: Document): SearchItem[] | null {
       ...(Number.isFinite(rating) ? { supplierRating: rating } : {}),
       ...(Number.isFinite(ratingCount) ? { ratingCount } : {}),
       ...(price === null ? { priceOnRequest: true } : {}),
+      // "unit":"Piece" is the counter the price is quoted per ("₹ 48,000/Piece").
+      unitLabel: normalizeUnit(typeof p["unit"] === "string" ? (p["unit"] as string) : null),
     });
   };
   for (const p of arr) {
@@ -134,6 +136,7 @@ export function tradeindiaEmbedded(doc: Document): SearchItem[] | null {
     const price = money?.amount ?? null;
     const moqRow = ((get(r, "custom_field_data_meta_info.Price_And_Quantity") as { label_name?: string; value?: string }[] | undefined) ?? []).find((x) => /minimum order/i.test(x.label_name ?? ""));
     const moq = moqRow ? parsePrice(moqRow.value ?? "") : null;
+    const unitRow = ((get(r, "custom_field_data_meta_info.Price_And_Quantity") as { label_name?: string; value?: string }[] | undefined) ?? []).find((x) => /unit of (?:price|measure)/i.test(x.label_name ?? ""));
     const badges: string[] = [];
     if (r["has_trust_stamp"]) badges.push("Trusted Seller");
     if (r["has_ti_verified"]) badges.push("TI Verified");
@@ -162,6 +165,8 @@ export function tradeindiaEmbedded(doc: Document): SearchItem[] | null {
       supplierVerified: !!(r["has_trust_stamp"] || r["has_ti_verified"]),
       businessType: r["ifmanu"] ? "factory" : r["iftrader"] || r["ifdistributor"] ? "trading" : "unknown",
       ...(price === null ? { priceOnRequest: true } : {}),
+      // "unit":"Piece/Pieces" on the row, else the "Unit of Price" label of the price block.
+      unitLabel: normalizeUnit(typeof r["unit"] === "string" ? (r["unit"] as string) : (unitRow?.value ?? null)),
     });
   }
   return items.length ? items : null;

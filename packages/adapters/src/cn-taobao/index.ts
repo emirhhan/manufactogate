@@ -1,6 +1,6 @@
 import type { LinkInfo, RawListing, RawListingDetail } from "@manufactogate/core";
 import { BADGES_TAOBAO } from "../badges";
-import { clean, extractCards, extractJsonAfter, get, inlineScriptText, parseCount, parsePrice, readEmbedded, textOf, tryJson } from "../dom";
+import { clean, countryOfPlace, extractCards, extractJsonAfter, get, inlineScriptText, parseCount, parsePrice, readEmbedded, textOf, tryJson } from "../dom";
 import { META_TAOBAO } from "../markets";
 import { detectSession, pageProbe, type PageExtractor, type RealMarketDef, type SearchItem } from "../runtime";
 
@@ -61,6 +61,7 @@ export const extractorTaobao: PageExtractor = {
           text: "",
           currency: "CNY",
           rating: null,
+          shipFrom: countryOfPlace(clean(String(get(r, "item_loc") ?? get(r, "procity") ?? ""))),
         });
       }
       if (items.length) return items;
@@ -103,6 +104,8 @@ export const extractorTaobao: PageExtractor = {
           badges: [...new Set([...(isTmall ? ["天猫"] : []), ...BADGE_WORDS.filter((w) => text.includes(w))])],
           text,
           currency: "CNY",
+          // The card's procity is the seller's shipping origin (province + city): a Chinese place → "cn".
+          shipFrom: location ? countryOfPlace(location) : null,
         });
       }
       if (items.length) return items;
@@ -142,9 +145,16 @@ export const extractorTaobao: PageExtractor = {
       walk(props);
       const bodyText = doc.body ? textOf(doc.body) : "";
       const sold = parseCount(String(item["vagueSellCount"] ?? "")) ?? parseCount(/已售\s*([\d.]+万?\+?)/.exec(bodyText)?.[1]);
+      // skuBase.skus lists every sellable combination; deliveryVO.deliveryFromAddr is the shipping origin ("陕西西安").
+      const skuBase = tryJson<Record<string, unknown>>(extractJsonAfter(text, '"skuBase":'));
+      const skus = get(skuBase, "skus");
+      const delivery = tryJson<Record<string, unknown>>(extractJsonAfter(text, '"deliveryVO":'));
+      const fromAddr = clean(String(get(delivery, "deliveryFromAddr") ?? ""));
       if (price !== null) {
         return {
           strategy: "embedded",
+          ...(Array.isArray(skus) && skus.length ? { variantCount: skus.length } : {}),
+          ...(fromAddr ? { shippingFrom: fromAddr } : {}),
           title: clean(String(item["title"])),
           price,
           sold,

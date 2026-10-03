@@ -175,7 +175,8 @@ Yakalanan 28 sayfanın 12'si ana sayfa, 4'ü uygulamanın kendisiydi; aşağıda
 - **Core/Web:** `fetchListing(id, hint)` ile Trendyol `merchantId` taşınır (Listing sayfası; `watch.ts` henüz değil);
   boş `tiers` "Fiyat teklifle" olarak gösterilir; `RawListing.titleLang`, `priceMax`, `priceOnRequest`, `reviewCount`,
   `soldPeriod`, `supplier{years, verified, businessType, rating}` `enrichListing` ile her pazarda dolar ve
-  Listing/SupplierPanel/`traceScore` bunları okur.
+  Listing/SupplierPanel/`traceScore` bunları okur. `packQty`, `unitLabel`, `shipFrom`, `variantCount` ve
+  `supplier.key` (çapraz mağaza kimlik tohumu) için bkz. § 10.
 - **Süre bütçesi:** tek kaynak `TIMING` (`runtime/protocol.ts`); sağlık turu 3 paralel × 8 s, arama 120 s etkin /
   600 s üst sınır. Buradaki pazar başına sayfa sayıları (`maxPages`) bu bütçeye göre seçilmiştir.
 
@@ -183,3 +184,73 @@ Yakalanan 28 sayfanın 12'si ana sayfa, 4'ü uygulamanın kendisiydi; aşağıda
 
 Pazar başına en az 2,5–3 s aralık ve saatte en fazla 100–120 istek. Arka planda açılan sekmeler iş bitince
 kapatılır. Sınırlar `packages/adapters/src/markets.ts` ve `wave2/generic.ts` içinde tutulur ve düşürülmez.
+
+## 10. Kart alanları: paket adedi, birim, gönderim yeri, varyant sayısı, tedarikçi anahtarı
+
+`SearchItem`/`CardData` dört yeni alan taşır: `packQty` (fiyatın kapsadığı birim sayısı), `unitLabel`
+(fiyatın/MOQ'nun birimi), `shipFrom` (ISO alpha-2 gönderim ülkesi), `variantCount` (kartta ilan edilen
+varyant sayısı). `enrichListing()` bunları her pazarda `RawListing`'e taşır; `enrichDetail()` aynı işi
+detay yükü için yapar (`unitLabel`, `variantCount`, `shippingFrom` yer metni, `shipFrom` ülke/yer).
+`toListing`/`toDetail` bu alanları elle kopyalamaz.
+
+Saf ayrıştırıcılar (`packages/adapters/src/dom/fields.ts`):
+
+- `parsePack(text)` → `{ qty, unit }`: "2件装", "5件套", "10 adet", "10'lu", "6’lı", "3 çift", "Set of 4",
+  "4-pack", "12 pcs", "2 pairs", "52 шт", "10個入り", "3개입", "x5" / "5x". **Pakete sayılmayanlar:** MOQ
+  ("Min. order: 200 Pieces", "500个起购", "minimum sipariş miktarı 1"), satış sayaçları ("1.234 adet satıldı"),
+  aralıklar ("50-300pcs"), model adları ("i60套装"), boyutlar ("10x20cm"), tek birim ("1件装"). Aralık 2–500.
+- `parseUnitLabel(text)`: "N个起购/起批/起订" → 个; "元/件", "₹ 48,000/Piece", "12,50 TL / adet", "per pair";
+  "Min. order: 200 Pieces" → `pcs`; "Unit of Price: Piece/Pieces" → `pcs`. Latin birimler kanonikleştirilir
+  (`normalizeUnit`: piece/pieces/pc → `pcs`, pair(s) → `pair`, set(s) → `set`, pack(s) → `pack`, kg, g, m, adet, шт…);
+  CJK sayaçlar olduğu gibi kalır (件 套 个 双 副 …). Paket ifadesi kendi birimini de verir ("2件装" → 件).
+- `parseShipFrom(text)`: yalnız açık işaretle ("Ships from", "Located in", "Gönderim yeri", "发货地", "発送元",
+  "Отправка из", "Dikirim dari", "free shipping from China"); **"Ships to …" hedeftir, sayılmaz.**
+  `countryOfPlace()` Çin il/şehir adlarını (浙江, 广东 佛山, 陕西西安, Shenzhen…) `cn`'ye, ülke adlarını
+  (Türkiye, Almanya, 日本, Китай…) ve alpha-2 kodları koda çevirir; bilinmeyen yer → `null`.
+- `parseVariantCount(text)`: "5 colors", "+3 renk" (= 4), "2 Farklı Renk", "12 Renk Seçeneği", "4色", "6 цветов".
+  Tek seçenek ("1 color") ve yıl/model sayıları sayılmaz.
+
+Tedarikçi kimlik tohumu (`packages/adapters/src/dom/supplier.ts`): `supplierKey({ name, country })` firma adını
+katlar — 有限公司/股份/集团/商贸/贸易/实业/科技/旗舰店/专营店, Co., Ltd., Inc, LLC, GmbH, A.Ş., Ltd. Şti., Sanayi,
+Ticaret, Trading, Technology, Store… atılır; büyük/küçük harf, Türkçe İ/ı, aksan ve noktalama silinir — ve
+ülkeyi önüne koyar: "深圳市示例电子有限公司" → `cn:深圳市示例电子`, "Shenzhen Shili Electronics Co., Ltd." =
+"SHENZHEN SHILI ELECTRONICS CO.,LTD" → `cn:shenzhenshilielectronics`, "Örnek Dış Ticaret Ltd. Şti." → `tr:ornek`.
+`enrichListing`/`enrichDetail` anahtarı `RawListing.supplier.key`'e yazar (ülke: `shipFrom` varsa o, yoksa pazarın
+ülkesi). Adsız kartlarda (yalnız `merchantId`/`mall_id`) anahtar üretilmez; detay sayfası adı getirince dolar.
+Çekirdek `ListingSupplierInfo` tipinde `key` yoktur; adapter `SupplierInfoKeyed` ile yapısal olarak genişletir.
+
+**Pazar başına kanıt** (fixture = yakalanan sayfa; "yok" = sayfada bu bilgi gösterilmiyor, alan boş kalır):
+
+| Pazar | packQty | unitLabel | shipFrom | variantCount | Kaynak / not |
+|---|---|---|---|---|---|
+| 1688 arama (i18n grid) | başlıktan ("2件装") | yok (hücrede "minimum sipariş miktarı 1", birim yok) | yok | yok | fixture `real-search-i18n` |
+| 1688 detay | başlıktan | `"unit":"个"` (`window.context`) | `location` "浙江省金华市" → `cn`, `shippingFrom` yer metni | `skuMap` uzunluğu (12) | fixture `real-detail` |
+| Taobao arama | başlıktan | yok | `procity` "广东 佛山" → `cn` (48/48 kart) | yok | fixture `real-search` |
+| Taobao detay | başlıktan | yok | `deliveryVO.deliveryFromAddr` "陕西西安" → `cn` | `skuBase.skus` uzunluğu (2) | fixture `real-detail` |
+| Pinduoduo arama | başlıktan | yok | yok (sayfadaki "商品发货地" bir filtre, kart alanı değil) | yok | fixture `real-search` |
+| Pinduoduo detay | başlıktan | `input[aria-label="当前数量为1件"]` → 件 | yok | `.sku-specs-key` grupları × seçenek (39 renk × 4 beden = 156) | fixture `real-detail`; `rawData` dolu gelirse `goods.skus` uzunluğu (doğrulanmadı) |
+| Trendyol arama | başlıktan ("10'lu") | yok | yok: yakalamada "Yurt Dışından" etiketi yok; görülürse ülke verilmediği için ham rozet olarak saklanır, `shipFrom` boş kalır | `variants` dizisi (API alanı; **yakalamada yok**, `null`) | fixture `real-search` |
+| Trendyol detay | başlıktan | yok | yok | `product.variants` uzunluğu (doğrulanmadı, ürün sayfası yakalaması istenir) | — |
+| Global Sources | — (200 MOQ'dur) | "Min. order: 200 Pieces" → `pcs` | yok | yok | fixture |
+| Yiwugo | — ("i60套装" model adı) | "500个起购" → 个, "1副起购" → 副 | yok | yok | fixture |
+| IndiaMART | — | `"unit":"Piece"` → `pcs` | yok | yok | fixture (RSC) |
+| TradeIndia | — | satır `"unit":"Piece/Pieces"` / "Unit of Price" → `pcs`, `pack` | yok | yok | fixture (`__NEXT_DATA__`) |
+| Temu TR (ana sayfa) | "15'li" → 15 adet | adet | yok (kartta "Gönderim yeri" metni yok) | yok | fixture ana sayfa; sonuç sayfası yakalaması istenir |
+| Ozon (ana sayfa) | "52 шт" → 52 | шт | yok | yok | fixture ana sayfa |
+| Mercari (ana sayfa) | "15 pack" → 15 | pack | yok | yok | fixture ana sayfa |
+| Lazada (ana sayfa) | — ("50-300pcs" aralık) | yok | yok | yok | fixture ana sayfa |
+| AliExpress, DHgate, eBay, Walmart, Amazon*, Noon, Wildberries, Gmarket, Yahoo, Tokopedia, Shopee, Coupang, Rakuten, Made-in-China, n11, Hepsiburada | başlıktan | kart metninden (genel ayrıştırıcı) | kart metninde "Ships from / Located in / Gönderim yeri" varsa | "N colors / +N renk" varsa | sonuç sayfası yakalaması yok; genel kart okuyucu + metin ayrıştırıcı, **doğrulanmadı** |
+
+Beta pazarların detay okuyucusu (`wave2/generic.ts`) görünür metinden `shipFrom` ve `variantCount` dener;
+bunlar da yakalama bekler.
+
+### Pinduoduo ikinci sayfa
+
+`maxPages: 1` kalır. Yakalanan `search_result.html` gövdesinde **hiç `<a>` yok** (0) ve kart metni DOM'da
+yer almıyor: liste yalnız `window.rawData.stores.store.data.ssrListData.list` içinde (20 kayıt). Sonraki sayfa,
+kaydırmada `flip` imleci (`"flip":"0;0;0;0;…"`, `"page":2`) ile XHR üzerinden gelir ve React, bağlantısız
+(`onClick`) kartlar olarak ekler; `rawData` güncellenmez. Eklentinin kaydırma geçişinden sonra DOM'dan okunacak
+ne bir ürün linki ne de `data-goods-id` özniteliği var; `extractCards` fallback'i (`LINK_PDD`) bu yüzden
+boş döner. XHR'ı kendimizin çağırması "kendi ağ isteği yok" kuralına aykırıdır. Kaydırma sonrası sayfanın
+bir yakalaması (kartların işaretlemesi) gelirse ikinci sayfa stratejisi eklenir; o zamana kadar tek sayfa.
+

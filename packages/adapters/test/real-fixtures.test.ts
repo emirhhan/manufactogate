@@ -2,7 +2,7 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import type { MarketId } from "@manufactogate/core";
-import { createRealAdapter, PAGE_EXTRACTORS, REAL_DEF_BY_ID, type SearchItem } from "../src";
+import { createRealAdapter, enrichListing, PAGE_EXTRACTORS, REAL_DEF_BY_ID, type SearchItem } from "../src";
 
 /** Pages captured from live markets on 2026-10-02 with the extension's "Fixture yakala". */
 function load(market: string, name: string, url: string): Document {
@@ -48,6 +48,21 @@ describe("1688 live pages", () => {
     expect(d.images.length).toBeGreaterThanOrEqual(5);
     expect(d.images[0]).toMatch(/^https:\/\/cbu01\.alicdn\.com\//);
     expect(Object.keys(d.attributes ?? {}).length).toBeGreaterThan(0);
+    // Unit the price is quoted per ("unit":"个"), one skuMap entry per variant, location = shipping origin, supplier identity seed.
+    expect(d.unitLabel).toBe("个");
+    expect(d.variantCount).toBe(12);
+    expect(d.shippingFrom).toBe("浙江省金华市");
+    expect(d.shipFrom).toBe("cn");
+    expect(d.packQty).toBeUndefined();
+    expect(d.supplier).toMatchObject({ key: "cn:永康市匠派户外休闲用品" });
+  });
+  it("search grid cells carry no unit, pack, ship-from or variant text (i18n UI); the fields stay unset", () => {
+    const doc = load("cn-1688", "real-search-i18n", "https://s.1688.com/selloffer/offer_search.htm?keywords=%E5%A4%B4%E7%9B%94");
+    const items = X("cn-1688").search!(doc) as SearchItem[];
+    expect(items.some((i) => i.unitLabel || i.shipFrom || i.variantCount || i.packQty)).toBe(false);
+    const l = enrichListing(REAL_DEF_BY_ID["cn-1688"]!, items[0]!, REAL_DEF_BY_ID["cn-1688"]!.toListing(items[0]!, "2026-10-03T00:00:00Z")!);
+    expect(l.unitLabel).toBeUndefined();
+    expect(l.shipFrom).toBeUndefined();
   });
 });
 
@@ -66,6 +81,14 @@ describe("taobao live page", () => {
     expect(tm.url).toContain("detail.tmall.com");
     expect(tm.badges).toContain("天猫");
     expect(items.every((i) => i.price !== null && i.price > 1)).toBe(true);
+    // procity ("广东 佛山") is the seller's shipping origin: every card maps to "cn"; no unit or variant text on the card.
+    expect(it.shipFrom).toBe("cn");
+    expect(items.every((i) => i.shipFrom === "cn")).toBe(true);
+    expect(it.unitLabel).toBeUndefined();
+    expect(it.variantCount).toBeUndefined();
+    const l = enrichListing(REAL_DEF_BY_ID["cn-taobao"]!, it, REAL_DEF_BY_ID["cn-taobao"]!.toListing(it, "2026-10-03T00:00:00Z")!);
+    expect(l.shipFrom).toBe("cn");
+    expect(l.supplier).toMatchObject({ key: "cn:苏苏骑行侠" });
   });
 });
 
@@ -81,6 +104,18 @@ describe("pinduoduo live page", () => {
     expect(it.sold).toBe(1_700_000);
     expect(it.image).toMatch(/^https:\/\/img\.pddpic\.com\//);
     expect(it.supplierId).toBe("241276537");
+  });
+  it("rawData list items carry no unit, pack, ship-from or variant fields; the DOM has no product anchors to read a second page from", () => {
+    const doc = load("cn-pinduoduo", "real-search", "https://mobile.yangkeduo.com/search_result.html?search_key=%E5%A4%B4%E7%9B%94");
+    const items = X("cn-pinduoduo").search!(doc) as SearchItem[];
+    expect(items.some((i) => i.unitLabel || i.shipFrom || i.variantCount || i.packQty)).toBe(false);
+    // The scroll-driven list is appended by XHR (flip cursor) into anchor-less React cards: nothing for the card heuristic.
+    expect(doc.querySelectorAll("a[href]").length).toBe(0);
+    expect(REAL_DEF_BY_ID["cn-pinduoduo"]!.maxPages).toBe(1);
+    // List items name no mall (only mall_id): without a name there is no identity key; the detail page supplies it.
+    expect(items.every((i) => i.shop === null)).toBe(true);
+    const l = enrichListing(REAL_DEF_BY_ID["cn-pinduoduo"]!, items[0]!, REAL_DEF_BY_ID["cn-pinduoduo"]!.toListing(items[0]!, "2026-10-03T00:00:00Z")!);
+    expect(l.supplier).toBeUndefined();
   });
 });
 
@@ -99,6 +134,11 @@ describe("pinduoduo live detail", () => {
     expect(d.supplierName).toBe("玛莎玛莎玛莎");
     expect(d.images.length).toBeGreaterThan(0);
     expect(d.attributes?.["外壳材质"]).toBe("ABS");
+    // SKU picker: 39 colour options × 4 sizes; the quantity input says "当前数量为1件".
+    expect(d.variantCount).toBe(156);
+    expect(d.unitLabel).toBe("件");
+    expect(d.shipFrom).toBeUndefined();
+    expect(d.supplier).toMatchObject({ key: "cn:玛莎玛莎玛莎" });
   });
 });
 
@@ -118,6 +158,16 @@ describe("trendyol live search", () => {
     expect(it.image).toMatch(/^https:\/\/cdn\.dsmcdn\.com\//);
     expect(it.supplierId).toBe("1033437");
     expect(items.every((i) => i.price !== null && i.price > 0)).toBe(true);
+    // The capture has no "variants" arrays and no cross-border tags: variantCount stays null, no "Yurt Dışından" badge.
+    expect(it.variantCount).toBeNull();
+    expect(items.some((i) => i.variantCount !== null && i.variantCount !== undefined)).toBe(false);
+    expect(items.some((i) => i.badges.includes("Yurt Dışından"))).toBe(false);
+    const l = enrichListing(REAL_DEF_BY_ID["tr-trendyol"]!, it, REAL_DEF_BY_ID["tr-trendyol"]!.toListing(it, "2026-10-03T00:00:00Z")!);
+    expect(l.variantCount).toBeUndefined();
+    expect(l.shipFrom).toBeUndefined();
+    // Search props carry merchantId but no merchant name: no identity key from the card (the product page names the seller).
+    expect(it.shop).toBeNull();
+    expect(l.supplier).toBeUndefined();
   });
 });
 
@@ -136,5 +186,10 @@ describe("taobao live detail", () => {
     expect(d.images).toHaveLength(5);
     expect(d.supplierName).toBe("KASK运动户外旗舰店");
     expect(d.supplierId).toBe("197944619");
+    // skuBase.skus has two combinations; deliveryVO.deliveryFromAddr is the shipping origin.
+    expect(d.variantCount).toBe(2);
+    expect(d.shippingFrom).toBe("陕西西安");
+    expect(d.shipFrom).toBe("cn");
+    expect(d.supplier).toMatchObject({ key: "cn:kask运动户外" });
   });
 });

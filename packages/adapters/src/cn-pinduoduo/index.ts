@@ -124,8 +124,10 @@ export const extractorPinduoduo: PageExtractor = {
       const images = ((g("topGallery") ?? g("gallery") ?? []) as { url?: string }[]).map((x) => x.url ?? "").filter(Boolean);
       const mall = (get(raw, "store.initDataObj.mall") ?? get(raw, "initDataObj.mall")) as Record<string, unknown> | undefined;
       const mallId = mall?.["mallId"] ?? mall?.["mall_id"];
+      const skus = g("skus");
       return {
         strategy: "embedded",
+        ...(Array.isArray(skus) && skus.length ? { variantCount: skus.length } : {}),
         title: clean(String(g("goodsName"))),
         price: Number.isFinite(fen) ? fen / 100 : null,
         sold: parseCount(String(g("sideSalesTip") ?? g("salesTip") ?? "")),
@@ -159,8 +161,23 @@ export const extractorPinduoduo: PageExtractor = {
     }
     const images = [...new Set([...doc.querySelectorAll("img")].map((i) => i.getAttribute("src") ?? "").filter((u) => /img\.pddpic\.com\/(open-gw|mms-material-img|goods|gaudit)/.test(u)))].slice(0, 10);
     const mallIdM = /mall_id=(\d+)/.exec(doc.documentElement?.innerHTML.slice(0, 200_000) ?? "");
+    // SKU picker: each ".sku-specs-key" (颜色, 尺码) is followed by its option buttons; combinations = product of the counts.
+    let variantCount = 1;
+    let specGroups = 0;
+    for (const key of doc.querySelectorAll(".sku-specs-key, [class*='sku-specs-key']")) {
+      const group = key.parentElement;
+      const options = group ? group.querySelectorAll("[role='button'][aria-label]").length : 0;
+      if (options > 0) {
+        variantCount *= options;
+        specGroups++;
+      }
+    }
+    const qtyLabel = doc.querySelector("input[aria-label*='当前数量为']")?.getAttribute("aria-label") ?? "";
+    const unitM = /当前数量为\d+\s*([\p{Script=Han}])/u.exec(qtyLabel);
     return {
       strategy: "dom",
+      ...(specGroups > 0 ? { variantCount } : {}),
+      ...(unitM ? { unitLabel: unitM[1] } : {}),
       title,
       price: Number(priceM[1]),
       sold: soldM ? parseCount(soldM[1]) : null,

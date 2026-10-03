@@ -150,6 +150,10 @@ export const extractor1688: PageExtractor = {
         for (const a of pa) if (a.name && a.value) attrs[a.name] = a.value;
       }
       const beginNum = Number(scriptField(text, "beginNum") ?? "") || tiers[0]?.minQty || null;
+      // Variants: one skuMap entry per sellable combination; "unit" is the counter the price is quoted per ("个").
+      const skuMap = tryJson<unknown[]>(extractJsonAfter(text, '"skuMap":'));
+      const unit = scriptField(text, "unit");
+      const location = clean(scriptField(text, "location") ?? "");
       return {
         strategy: "embedded",
         title: clean(offerTitle),
@@ -157,11 +161,14 @@ export const extractor1688: PageExtractor = {
         images,
         companyName: clean(scriptField(text, "companyName") ?? ""),
         memberId: scriptField(text, "sellerMemberId") ?? "",
-        location: clean(scriptField(text, "location") ?? ""),
+        location,
         sold: Number(scriptField(text, "saledCount") ?? "") || null,
         moq: beginNum,
         badges: BADGE_WORDS.filter((w) => text.includes(`"${w}"`) || (doc.body?.textContent ?? "").includes(w)),
         attributes: attrs,
+        ...(unit && /^[\p{Script=Han}]{1,2}$/u.test(unit) ? { unitLabel: unit } : {}),
+        ...(Array.isArray(skuMap) && skuMap.length ? { variantCount: skuMap.length } : {}),
+        ...(location ? { shippingFrom: location } : {}),
       };
     }
     const data = readEmbedded<Record<string, unknown>>(doc, ["window.__INIT_DATA", "window.__INIT_DATA__", "__INIT_DATA"]);
@@ -177,7 +184,11 @@ export const extractor1688: PageExtractor = {
       const images = ((g("images") ?? g("globalData.images") ?? g("data.images") ?? []) as { fullPathImageURI?: string; originalImageURI?: string }[])
         .map((i) => i.fullPathImageURI ?? i.originalImageURI ?? "")
         .filter(Boolean);
+      const skuMap = (g("globalData.skuModel.skuMap") ?? g("skuModel.skuMap") ?? g("globalData.orderParamModel.orderParam.skuParam.skuMap")) as unknown;
+      const unit = g("tempModel.unit") ?? g("globalData.tempModel.unit") ?? g("globalData.orderParamModel.orderParam.unit");
       return {
+        ...(typeof unit === "string" && unit ? { unitLabel: unit } : {}),
+        ...(Array.isArray(skuMap) && skuMap.length ? { variantCount: skuMap.length } : skuMap && typeof skuMap === "object" && Object.keys(skuMap).length ? { variantCount: Object.keys(skuMap).length } : {}),
         strategy: "embedded",
         title,
         tiers,

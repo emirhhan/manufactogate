@@ -1,5 +1,5 @@
 import { AdapterError, type AdapterProgress, type MarketId } from "@manufactogate/core";
-import { createRealAdapter, detailUrlFor, enrichListing, REAL_DEF_BY_ID, requestBudgetMs, strategyOf, TIMING, type ExtractFailure, type ExtractRequest, type ExtractResult, type PageRunner, type RunnerOptions, type SearchItem, type SearchPayload } from "../src";
+import { createRealAdapter, detailUrlFor, enrichDetail, enrichListing, REAL_DEF_BY_ID, requestBudgetMs, strategyOf, TIMING, type ExtractFailure, type ExtractRequest, type ExtractResult, type PageRunner, type RunnerOptions, type SearchItem, type SearchPayload } from "../src";
 
 /** A scripted PageRunner: each call is answered by `script(req, callIndex)`; every request and its options are recorded. */
 function scripted(script: (req: ExtractRequest, n: number, opts: RunnerOptions) => ExtractResult<unknown> | ExtractFailure | Promise<ExtractResult<unknown> | ExtractFailure>) {
@@ -225,6 +225,61 @@ describe("listing enrichment from card fields", () => {
     const l = enrichListing(def, item, { ...def.toListing(item, "2026-10-03T00:00:00Z")!, rating: 98 });
     expect(l.soldPeriod).toBe("30d");
     expect(l.ratingMax).toBe(100);
+  });
+});
+
+describe("pack, unit, ship-from, variant count and supplier key", () => {
+  it("copies the card fields onto the listing and seeds the supplier key with the market country", () => {
+    const def = D("cn-aliexpress");
+    const item: SearchItem = { ...card("1005006123456789", "Smart Watch Strap", 4.2), url: "https://www.aliexpress.com/item/1005006123456789.html", shop: "Shenzhen Shili Electronics Co., Ltd.", packQty: 4, unitLabel: "pcs", shipFrom: "cn", variantCount: 5, text: "Ships from China 5 colors Set of 4" };
+    const l = enrichListing(def, item, def.toListing(item, "2026-10-03T00:00:00Z")!);
+    expect(l).toMatchObject({ packQty: 4, unitLabel: "pcs", shipFrom: "cn", variantCount: 5, supplier: { key: "cn:shenzhenshilielectronics" } });
+  });
+  it("reads the pack size from the title of embedded items and prefers an explicit unit over the pack's", () => {
+    const def = D("cn-1688");
+    const embedded: SearchItem = { ...card("7001", "TWS蓝牙耳机 2件装", 28.5), text: "", shop: "东莞市耳机实业有限公司" };
+    const l = enrichListing(def, embedded, def.toListing(embedded, "2026-10-03T00:00:00Z")!);
+    expect(l.packQty).toBe(2);
+    expect(l.unitLabel).toBe("件");
+    expect(l.supplier).toEqual({ key: "cn:东莞市耳机" });
+    const explicit: SearchItem = { ...card("7002", "Coasters Set of 4", 3), unitLabel: "set", text: "" };
+    expect(enrichListing(def, explicit, def.toListing(explicit, "2026-10-03T00:00:00Z")!)).toMatchObject({ packQty: 4, unitLabel: "set" });
+    // Single items and nulls leave the fields unset; a card without a shop has no key.
+    const plain: SearchItem = { ...card("7003", "蓝牙耳机", 10), packQty: null, unitLabel: null, shipFrom: null, variantCount: null, text: "" };
+    const p = enrichListing(def, plain, def.toListing(plain, "2026-10-03T00:00:00Z")!);
+    expect(p.packQty).toBeUndefined();
+    expect(p.unitLabel).toBeUndefined();
+    expect(p.shipFrom).toBeUndefined();
+    expect(p.variantCount).toBeUndefined();
+    expect(p.supplier).toBeUndefined();
+  });
+  it("keeps the fields through the wave-2 generic and wave-3 search pipelines (toListing + enrichListing)", async () => {
+    for (const [id, url] of [["tr-hepsiburada", "https://www.hepsiburada.com/ara?q=kask"], ["us-ebay", "https://www.ebay.com/sch/i.html?_nkw=kask"]] as const) {
+      const def = D(id);
+      const item: SearchItem = { ...card("HBC00001ABCDE", "Kask 2'li set", 100), url: id === "us-ebay" ? "https://www.ebay.com/itm/123456789012" : "https://www.hepsiburada.com/kask-p-HBC00001ABCDE", shop: "Örnek Dış Ticaret Ltd. Şti.", shipFrom: "cn", variantCount: 3, unitLabel: "pair", text: "card" };
+      const { runner } = scripted(() => ok([item], url));
+      const [l] = await collect(createRealAdapter(def, runner).searchByText("kask"));
+      expect(l, id).toMatchObject({ packQty: 2, unitLabel: "pair", shipFrom: "cn", variantCount: 3, supplier: { key: "cn:ornek" } });
+    }
+  });
+  it("enriches detail payloads: unit, variants, shipping origin → country, pack from the title, supplier key", async () => {
+    const def = D("cn-1688");
+    const payload = { title: "收纳盒 10个装", tiers: [{ minQty: 1, unitPrice: 9.9 }], images: [], companyName: "深圳市示例电子有限公司", memberId: "b2b-1", location: "广东省深圳市", unitLabel: "套", variantCount: 3, shippingFrom: "广东 深圳", badges: [] };
+    const base = def.toDetail(payload, "770445590409", "2026-10-03T00:00:00Z")!;
+    const d = enrichDetail(def, payload, base);
+    expect(d).toMatchObject({ packQty: 10, unitLabel: "套", variantCount: 3, shippingFrom: "广东 深圳", shipFrom: "cn", supplier: { key: "cn:深圳市示例电子" } });
+    // Through fetchListing as well; an alpha-2 "shipFrom" on the payload is taken as is, a place name is mapped.
+    const runner: PageRunner = { async run(req) { return { ok: true, data: { session: "logged-in", strategy: "embedded", detail: { ...payload, shipFrom: "HK", shippingFrom: undefined } } as never, finalUrl: req.url, tookMs: 1 }; } };
+    const via = await createRealAdapter(def, runner).fetchListing("770445590409");
+    expect(via.shipFrom).toBe("hk");
+    expect(via.shippingFrom).toBeUndefined();
+    expect(via.supplier).toMatchObject({ key: "hk:深圳市示例电子" });
+    // No evidence on the payload: the detail's own location still gives the country, nothing else is invented.
+    const bare = enrichDetail(def, { title: "x" }, def.toDetail({ ...payload, title: "蓝牙耳机", unitLabel: undefined, variantCount: undefined, shippingFrom: undefined }, "1", "2026-10-03T00:00:00Z")!);
+    expect(bare.packQty).toBeUndefined();
+    expect(bare.unitLabel).toBeUndefined();
+    expect(bare.variantCount).toBeUndefined();
+    expect(bare.shipFrom).toBe("cn");
   });
 });
 

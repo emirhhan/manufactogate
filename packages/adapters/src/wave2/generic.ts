@@ -1,5 +1,5 @@
 import type { LinkInfo, MarketMeta, NormalizedBadge, RawListing, RawListingDetail } from "@manufactogate/core";
-import { canonicalUrl, clean, extractCards, homeOriginFor, parseMoney, parsePrice, readJsonLd, urlOnHosts, visibleText } from "../dom";
+import { canonicalUrl, clean, extractCards, homeOriginFor, parseMoney, parsePrice, parseShipFrom, parseVariantCount, readJsonLd, urlOnHosts, visibleText } from "../dom";
 import { detectSession, pageProbe, type CalibrationStatus, type PageExtractor, type RealMarketDef, type SearchItem } from "../runtime";
 
 /** Generic text-search market definition built on card extraction; used by all beta markets. */
@@ -221,7 +221,21 @@ export function makeDef(g: GenericDef): RealMarketDef {
         .filter((u) => /^https?:/.test(u) && !/\.svg|sprite|icon|logo|badge|flag/i.test(u));
       const images = [...new Set([...(og && /^https?:/.test(og) ? [og] : []), ...ldImages, ...domImages])].slice(0, 8);
       const brand = ld && typeof ld["brand"] === "object" && ld["brand"] ? clean(String((ld["brand"] as Record<string, unknown>)["name"] ?? "")) : "";
-      return { strategy: "dom", title, price, currency: currency ?? g.currency, images, badges: [], ...(brand ? { attributes: { Marka: brand } } : {}) };
+      // Ship-from / variant wording on the page ("Ships from China", "5 colors"); enrichDetail maps them.
+      const pageText = visibleText(doc, 80_000);
+      const shipFrom = parseShipFrom(pageText);
+      const variantCount = parseVariantCount(pageText);
+      return {
+        strategy: "dom",
+        title,
+        price,
+        currency: currency ?? g.currency,
+        images,
+        badges: [],
+        ...(brand ? { attributes: { Marka: brand } } : {}),
+        ...(shipFrom ? { shipFrom } : {}),
+        ...(variantCount ? { variantCount } : {}),
+      };
     },
   };
   const detailUrl = g.detailUrl;

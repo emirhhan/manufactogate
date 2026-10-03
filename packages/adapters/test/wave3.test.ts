@@ -2,7 +2,7 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import type { MarketId } from "@manufactogate/core";
-import { hostMatches, isResultsUrl, PAGE_EXTRACTORS, REAL_DEF_BY_ID, REAL_DEFS, searchPayloadFor, WAVE3_DEFS, type SearchItem } from "../src";
+import { enrichListing, hostMatches, isResultsUrl, PAGE_EXTRACTORS, REAL_DEF_BY_ID, REAL_DEFS, searchPayloadFor, WAVE3_DEFS, type SearchItem } from "../src";
 
 /** Pages captured from the user's browser on 2026-10-03 with "Fixture yakala", trimmed and sanitised. */
 function load(market: string, name: string, url: string): Document {
@@ -120,6 +120,14 @@ describe("Global Sources search page", () => {
     const l = D("cn-globalsources").toListing(it, "2026-10-03T00:00:00Z")!;
     expect(l.price.tiers[0]).toEqual({ minQty: 200, unitPrice: 14.49 });
     expect(l.badges).toContain("Verified Maufacturer");
+    // "Min. order: 200 Pieces" names the unit; the 200 is the MOQ, never a pack size.
+    expect(it.unitLabel).toBe("pcs");
+    expect(it.packQty).toBeNull();
+    expect(xs.every((i) => i.unitLabel === "pcs")).toBe(true);
+    const e = enrichListing(D("cn-globalsources"), it, l);
+    expect(e.unitLabel).toBe("pcs");
+    expect(e.packQty).toBeUndefined();
+    expect(e.supplier).toMatchObject({ key: "cn:shenzhenn1intelligent" });
   });
 });
 
@@ -140,6 +148,11 @@ describe("Yiwugo search page", () => {
     const l = D("cn-yiwugo").toListing(it, "2026-10-03T00:00:00Z")!;
     expect(l.moq).toBe(500);
     expect(l.badges).toContain("2 yıl");
+    // "500个起购" → unit 个; "i60套装" is a model name, not a pack; "1副起购" → 副.
+    expect(it.unitLabel).toBe("个");
+    expect(it.packQty).toBeNull();
+    expect(by(xs, "976531306").unitLabel).toBe("副");
+    expect(enrichListing(D("cn-yiwugo"), it, l).unitLabel).toBe("个");
   });
 });
 
@@ -166,6 +179,13 @@ describe("IndiaMART export search (RSC flight payload)", () => {
     const l = D("in-indiamart").toListing(it, "2026-10-03T00:00:00Z")!;
     expect(l.rating).toBe(4.8);
     expect(l.badges).toContain("7 yıl");
+    // "unit":"Piece" ("₹ 48,000/Piece") → pcs; no ship-from or variant fields in the payload.
+    expect(it.unitLabel).toBe("pcs");
+    expect(xs.every((i) => i.unitLabel === "pcs")).toBe(true);
+    const e = enrichListing(D("in-indiamart"), it, l);
+    expect(e.unitLabel).toBe("pcs");
+    expect(e.shipFrom).toBeUndefined();
+    expect(e.supplier).toMatchObject({ key: "in:pramukhimpex", years: 7, verified: true });
   });
 });
 
@@ -191,6 +211,9 @@ describe("TradeIndia manufacturers page (__NEXT_DATA__)", () => {
     const l = D("in-tradeindia").toListing(it, "2026-10-03T00:00:00Z")!;
     expect(l.badges).toContain("Manufacturer");
     expect(l.badges).toContain("16 yıl");
+    // Row "unit":"Piece/Pieces" (also "Unit of Price" in the price block) → pcs.
+    expect(it.unitLabel).toBe("pcs");
+    expect(enrichListing(D("in-tradeindia"), it, l)).toMatchObject({ unitLabel: "pcs", supplier: { key: "in:giftmart", years: 16, businessType: "factory" } });
   });
   it("keeps price-less B2B rows as price-on-request listings", () => {
     const def = D("in-tradeindia");
@@ -218,6 +241,8 @@ describe("home-page captures (promo cards) parse with correct prices and titles"
     expect(it.priceCurrency).toBe("USD");
     expect(it.title).toBe("15 pack of Mewtwo promo");
     expect(it.sold).toBeNull();
+    expect(it.packQty).toBe(15);
+    expect(it.unitLabel).toBe("pack");
   });
   it("Walmart: price from the aria-label, badge prefix stripped from the title", () => {
     const xs = items("us-walmart", "real-home", "https://www.walmart.com/");
@@ -247,6 +272,10 @@ describe("home-page captures (promo cards) parse with correct prices and titles"
     expect(it.priceCurrency).toBe("RUB");
     expect(it.rating).toBe(4.8);
     expect(xs.every((i) => i.title.length > 5)).toBe(true);
+    // "52 шт" in the title is the pack size.
+    expect(it.packQty).toBe(52);
+    expect(it.unitLabel).toBe("шт");
+    expect(enrichListing(D("ru-ozon"), it, D("ru-ozon").toListing(it, "2026-10-03T00:00:00Z")!)).toMatchObject({ packQty: 52, unitLabel: "шт" });
   });
   it("Wildberries: NBSP thousands, current price over strike-through, aria-label title", () => {
     const xs = items("ru-wildberries", "real-home", "https://www.wildberries.ru/");
@@ -264,6 +293,11 @@ describe("home-page captures (promo cards) parse with correct prices and titles"
     expect(it.title).toMatch(/^15'li K5/);
     const l = D("us-temu").toListing(it, "2026-10-03T00:00:00Z")!;
     expect(l.price.currency).toBe("TRY");
+    // "15'li" → pack of 15; the home page shows no "Gönderim yeri" text, so ship-from stays unset.
+    expect(it.packQty).toBe(15);
+    expect(it.unitLabel).toBe("adet");
+    expect(it.shipFrom).toBeNull();
+    expect(enrichListing(D("us-temu"), it, l)).toMatchObject({ packQty: 15, unitLabel: "adet" });
   });
   it("Tokopedia: category/discovery links are not products; sold counts with 'rb'", () => {
     const xs = items("id-tokopedia", "real-home", "https://www.tokopedia.com/");
@@ -280,6 +314,8 @@ describe("home-page captures (promo cards) parse with correct prices and titles"
     expect(xs).toHaveLength(3);
     expect(by(xs, "2372134989").price).toBe(22.84);
     expect(by(xs, "2372134989").priceCurrency).toBe("THB");
+    // "50-300pcs" is a quantity range, not a pack.
+    expect(xs.every((i) => i.packQty === null)).toBe(true);
   });
   it("eBay: current price, not the strike-through", () => {
     const xs = items("us-ebay", "real-home", "https://www.ebay.com/");

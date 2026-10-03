@@ -86,6 +86,11 @@ export const extractorTrendyol: PageExtractor = {
         }
         const merchantName = clean(String(get(r, "merchant.name") ?? get(r, "sellerName") ?? get(r, "merchantName") ?? ""));
         const merchantId = get(r, "merchantId") ?? get(r, "merchant.id") ?? merchantOf(rawUrl);
+        // "variants" (size/colour options of the product group) is a documented search-API field; the captured page has none (docs/CALIBRATION.md § 10).
+        const variants = get(r, "variants");
+        const variantCount = Array.isArray(variants) && variants.length > 1 ? variants.length : null;
+        // Cross-border offers carry a "Yurt Dışından" tag; the country is not given, so it is kept as a raw badge only.
+        if (/yurt\s*d[ıi]ş[ıi]/i.test(JSON.stringify(get(r, "tagDetails") ?? get(r, "tags") ?? get(r, "badges") ?? ""))) badges.add("Yurt Dışından");
         items.push({
           id,
           url,
@@ -103,6 +108,7 @@ export const extractorTrendyol: PageExtractor = {
           rating: Number(get(r, "ratingScore.averageRating") ?? NaN) || null,
           ...(ratingCount !== null ? { ratingCount } : {}),
           supplierId: merchantId !== undefined && merchantId !== null ? String(merchantId) : null,
+          variantCount,
         });
       }
       if (items.length) return items;
@@ -137,8 +143,10 @@ export const extractorTrendyol: PageExtractor = {
     if (p) {
       const price = Number(get(p, "price.sellingPrice.value") ?? get(p, "price.discountedPrice.value") ?? get(p, "price.sellingPrice") ?? get(p, "price.discountedPrice") ?? NaN);
       const images = ((get(p, "images") ?? []) as unknown[]).map((i) => (typeof i === "string" ? i : String((i as Record<string, unknown>)?.["url"] ?? ""))).filter(Boolean).map((i) => (i.startsWith("http") ? i : `https://cdn.dsmcdn.com${i}`));
+      const variants = get(p, "variants") ?? get(p, "allVariants");
       return {
         strategy: "embedded",
+        ...(Array.isArray(variants) && variants.length > 1 ? { variantCount: variants.length } : {}),
         title: clean(`${get(p, "brand.name") ?? ""} ${get(p, "name") ?? ""}`),
         price: Number.isFinite(price) ? price : null,
         sold: parseCount(String(get(p, "ratingSummary.totalRatingCount") ?? get(p, "ratingScore.totalCount") ?? "")),
