@@ -35,7 +35,7 @@ export function ProductCard({ item }: { item: FeedItem }) {
           <span className="absolute left-2 top-2 rounded bg-success px-1.5 py-0.5 text-[11px] font-medium text-white">Kaynak fabrika</span>
         )}
         {item.priceRatio !== null && item.priceRatio >= 3 && (
-          <span className="absolute right-2 top-2 rounded bg-surface/95 px-1.5 py-0.5 text-[11px] font-medium text-accent tnum">×{item.priceRatio.toFixed(1)} marj</span>
+          <span className="absolute right-2 top-2 rounded bg-overlay px-1.5 py-0.5 text-[11px] font-medium text-accent tnum">×{item.priceRatio.toFixed(1)} marj</span>
         )}
       </div>
       <div className="flex flex-1 flex-col gap-1.5 p-3">

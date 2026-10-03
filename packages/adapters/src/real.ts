@@ -3,7 +3,7 @@ import { def1688 } from "./cn-1688";
 import { defPinduoduo } from "./cn-pinduoduo";
 import { defTaobao } from "./cn-taobao";
 import { AdapterRegistry } from "./registry";
-import { createRealAdapter, type PageExtractor, type PageRunner, type RealMarketDef } from "./runtime";
+import { createRealAdapter, type CalibrationStatus, type PageExtractor, type PageRunner, type RealMarketDef } from "./runtime";
 import { defTrendyol } from "./tr-trendyol";
 import { WAVE2_DEFS } from "./wave2";
 import { WAVE3_DEFS } from "./wave3";
@@ -17,6 +17,9 @@ export const PAGE_EXTRACTORS: Record<MarketId, PageExtractor> = Object.fromEntri
 
 /** Market definitions keyed by id (URLs, link resolvers, mappers). */
 export const REAL_DEF_BY_ID: Record<MarketId, RealMarketDef> = Object.fromEntries(REAL_DEFS.map((d) => [d.id, d])) as Record<MarketId, RealMarketDef>;
+
+/** How each market's selectors were verified: live (seen working in the user's browser), fixture (captured page), synthetic, none. */
+export const CALIBRATION_STATUS: Record<MarketId, CalibrationStatus> = Object.fromEntries(REAL_DEFS.map((d) => [d.id, d.calibration ?? "none"])) as Record<MarketId, CalibrationStatus>;
 
 /** Hosts the extension needs permission for. */
 export const REAL_HOSTS: string[] = [...new Set(REAL_DEFS.flatMap((d) => d.meta.hosts))];

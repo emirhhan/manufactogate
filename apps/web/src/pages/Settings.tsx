@@ -1,62 +1,135 @@
+import { useEffect, useMemo, useRef, useState } from "react";
 import { COUNTRY_NAMES_TR, COUNTRY_PROFILES } from "@manufactogate/country-profiles";
-import { DISPLAY_CURRENCIES } from "@/lib/fx";
-import { Button, Card, cn } from "@/components/ui";
-import { sendToExtension } from "@/lib/bridge";
-import { getRegistry } from "@/lib/registry";
-import { useExtension } from "@/store/extension";
-import { useSettings, type DataSourcePref } from "@/store/settings";
-import { useState } from "react";
-import type { ExtToWeb } from "@manufactogate/adapters";
-import type { HealthResult, MarketId } from "@manufactogate/core";
+import { REAL_DEF_BY_ID } from "@manufactogate/adapters";
+import type { HealthResult, MarketAdapter, MarketId, SessionState } from "@manufactogate/core";
+import { Badge, Button, Card, Input, Select, cn, usePageTitle } from "@/components/ui";
+import { clearData, exportAll, importAll, parseBackup, storageEstimate, tableCounts, type BackupTable } from "@/lib/db";
+import { download } from "@/lib/export";
+import { relTime } from "@/lib/format";
+import { DISPLAY_CURRENCIES, FX_AS_OF, FX_TO_TRY } from "@/lib/fx";
+import { getRegistry, REGION_LABELS_TR, REGION_ORDER, regionOf, type Region } from "@/lib/registry";
+import { isStaleHealth, useExtension } from "@/store/extension";
+import { EDITABLE_FX, MAX_PER_MARKET_OPTIONS, VERIFIED_MARKETS, useSettings, type DataSourcePref, type MaxPerMarket } from "@/store/settings";
+import { toast } from "@/store/toast";
+import { formatBytes } from "./Dashboard";
 
-const SESSION_TR: Record<string, string> = { "logged-in": "giriş yapıldı", "logged-out": "giriş yok", captcha: "doğrulama bekliyor", unknown: "giriş gerekmez" };
+/** Session label: "unknown" is only "giriş gerekmez" when the market has no login at all. Pure. */
+export function sessionLabel(state: SessionState | undefined, hasLogin: boolean): string {
+  switch (state) {
+    case "logged-in":
+      return "giriş yapıldı";
+    case "logged-out":
+      return "giriş yok";
+    case "captcha":
+      return "doğrulama bekliyor";
+    default:
+      return hasLogin ? "bilinmiyor" : "giriş gerekmez";
+  }
+}
+
+/** Market presets. Pure. */
+export function presetMarkets(kind: "working" | "verified" | "target" | "all" | "none", all: Pick<MarketAdapter, "id" | "meta">[], health: Partial<Record<string, HealthResult>>, targetCountry: string): MarketId[] {
+  switch (kind) {
+    case "working": {
+      const ok = all.filter((a) => health[a.id]?.ok).map((a) => a.id);
+      return ok.length ? ok : VERIFIED_MARKETS.filter((id) => all.some((a) => a.id === id));
+    }
+    case "verified":
+      return all.filter((a) => !a.meta.version.includes("beta")).map((a) => a.id);
+    case "target":
+      return all.filter((a) => a.meta.country === targetCountry && a.meta.role !== "source").map((a) => a.id);
+    case "all":
+      return all.map((a) => a.id);
+    default:
+      return [];
+  }
+}
+
+const ROLE_TR = { source: "tedarik", target: "satış", both: "ikisi" } as const;
 
 export function Settings() {
+  usePageTitle("Ayarlar");
   const s = useSettings();
-  const ext = useExtension((x) => x.info);
-  const refreshExt = useExtension((x) => x.set);
+  const ext = useExtension();
   const reg = getRegistry();
-  const [health, setHealth] = useState<Partial<Record<MarketId, HealthResult>>>({});
-  const [checking, setChecking] = useState(false);
-  const [progress, setProgress] = useState<string>("");
-  /** Checks every enabled market one after another with a pause, like a person opening each site. */
-  const runRound = async () => {
-    setChecking(true);
+  const all = reg.all();
+  const enabledSet = useMemo(() => new Set(s.enabledMarkets), [s.enabledMarkets]);
+  const groups = useMemo(() => {
+    const m = new Map<Region, MarketAdapter[]>();
+    for (const a of all) {
+      const r = regionOf(a.meta.country);
+      (m.get(r) ?? m.set(r, []).get(r)!).push(a);
+    }
+    return REGION_ORDER.filter((r) => m.has(r)).map((r) => ({ region: r, adapters: m.get(r)!.sort((a, b) => Number(a.meta.version.includes("beta")) - Number(b.meta.version.includes("beta")) || a.meta.name.localeCompare(b.meta.name)) }));
+  }, [all.length]);
+  const toggleGroup = (ids: MarketId[], on: boolean) => s.setEnabledMarkets(on ? [...new Set([...s.enabledMarkets, ...ids])] : s.enabledMarkets.filter((m) => !ids.includes(m)));
+  const applyPreset = (kind: Parameters<typeof presetMarkets>[0]) => s.setEnabledMarkets(presetMarkets(kind, all, ext.health, s.targetCountry));
+
+  // Data section
+  const [storage, setStorage] = useState<{ usage: number; quota: number } | null>(null);
+  const [counts, setCounts] = useState<Record<BackupTable, number> | null>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
+  const [importMode, setImportMode] = useState<"merge" | "replace">("merge");
+  const [busy, setBusy] = useState(false);
+  const refreshStorage = () => {
+    void storageEstimate().then(setStorage);
+    void tableCounts().then(setCounts).catch(() => setCounts(null));
+  };
+  useEffect(refreshStorage, []);
+  const doExport = async () => {
+    setBusy(true);
     try {
-      const targets = reg.all().filter((a) => s.enabledMarkets.includes(a.id) || !a.meta.version.includes("beta"));
-      for (let i = 0; i < targets.length; i++) {
-        const a = targets[i]!;
-        setProgress(`${i + 1}/${targets.length} · ${a.meta.name}`);
-        try {
-          const r = await sendToExtension<ExtToWeb & { type: "health" }>({ type: "health", market: a.id }, 120000);
-          setHealth((prev) => ({ ...prev, ...r.health }));
-        } catch (e) {
-          setHealth((prev) => ({ ...prev, [a.id]: { ok: false, checkedAt: new Date().toISOString(), message: e instanceof Error ? e.message : String(e) } }));
-        }
-        await new Promise((r) => setTimeout(r, 3000 + Math.random() * 2000));
-      }
-      const sess = await sendToExtension<ExtToWeb & { type: "sessions" }>({ type: "sessions" }, 3000);
-      refreshExt({ ...ext, sessions: sess.sessions });
+      download(`manufactogate-yedek-${new Date().toISOString().slice(0, 10)}.json`, await exportAll(), "application/json");
+      toast("Yedek indirildi", { tone: "success" });
+    } catch (e) {
+      toast(`Yedek alınamadı: ${e instanceof Error ? e.message : String(e)}`, { tone: "danger" });
     } finally {
-      setChecking(false);
-      setProgress("");
+      setBusy(false);
     }
   };
-  const runHealth = async () => {
-    setChecking(true);
+  const doImport = async (file: File | undefined) => {
+    if (!file) return;
+    setBusy(true);
     try {
-      const r = await sendToExtension<ExtToWeb & { type: "health" }>({ type: "health" }, 180000);
-      setHealth(r.health);
-      const sess = await sendToExtension<ExtToWeb & { type: "sessions" }>({ type: "sessions" }, 3000);
-      refreshExt({ ...ext, sessions: sess.sessions });
+      const backup = parseBackup(await file.text());
+      if (importMode === "replace" && !confirm("Mevcut veriler silinip yedekle değiştirilecek. Devam?")) return;
+      const r = await importAll(backup, importMode);
+      toast(`${r.rows.toLocaleString("tr-TR")} satır yüklendi (${importMode === "replace" ? "değiştirildi" : "birleştirildi"})`, { tone: "success" });
+      await s.hydrate();
+      refreshStorage();
+    } catch (e) {
+      toast(e instanceof Error ? e.message : String(e), { tone: "danger" });
     } finally {
-      setChecking(false);
+      setBusy(false);
+      if (fileRef.current) fileRef.current.value = "";
     }
   };
+  const doClear = async (kind: Parameters<typeof clearData>[0], label: string) => {
+    if (!confirm(`${label} silinsin mi? Bu işlem geri alınamaz.`)) return;
+    setBusy(true);
+    try {
+      await clearData(kind);
+      toast(`${label} silindi`, { tone: "success" });
+      if (kind === "settings") await s.hydrate();
+      refreshStorage();
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const healthRow = (a: MarketAdapter) => {
+    const h = ext.health[a.id];
+    const sess = ext.info.sessions[a.id];
+    const def = REAL_DEF_BY_ID[a.id];
+    const dot = h ? (h.ok ? "bg-success" : "bg-danger") : sess === "logged-in" ? "bg-success" : sess === "logged-out" || sess === "captcha" ? "bg-warning" : "bg-border";
+    return { h, sess, def, dot };
+  };
+
   return (
-    <div className="mx-auto max-w-[960px] px-4 py-8">
+    <div className="mx-auto max-w-[1100px] px-4 py-8">
       <h1 className="text-xl font-semibold tracking-tight">Ayarlar</h1>
 
+      {/* ---- Data source ---- */}
       <section className="mt-6">
         <h2 className="mb-2 text-[12px] font-medium uppercase tracking-wide text-muted">Veri kaynağı</h2>
         <Card className="p-4">
@@ -68,102 +141,144 @@ export function Settings() {
                 ["mock", "Sahte veri"],
               ] as [DataSourcePref, string][]
             ).map(([k, label]) => (
-              <button
-                key={k}
-                onClick={() => s.setDataSource(k)}
-                className={cn("rounded-md border px-3 py-1.5 text-[13px]", s.dataSource === k ? "border-accent bg-accent/10 text-accent" : "border-border hover:bg-surface-2")}
-              >
+              <button key={k} type="button" aria-pressed={s.dataSource === k} onClick={() => s.setDataSource(k)} className={cn("rounded-md border px-3 py-1.5 text-[13px]", s.dataSource === k ? "border-accent bg-accent/10 text-accent" : "border-border hover:bg-surface-2")}>
                 {label}
               </button>
             ))}
-            <span className="ml-auto text-[12px] text-muted">{ext.installed ? `Eklenti v${ext.version} bağlı` : "Eklenti bulunamadı"}</span>
+            <span className="ml-auto text-[12px] text-muted">
+              {ext.info.installed ? (ext.info.orphaned ? "Eklenti bağlantısı koptu · sayfayı yenile" : `Eklenti v${ext.info.version} bağlı${ext.info.lastSeenAt ? ` · ${relTime(ext.info.lastSeenAt)}` : ""}`) : ext.detecting ? "Eklenti aranıyor…" : "Eklenti bulunamadı"}
+              {!ext.info.installed && <Button size="sm" variant="ghost" className="ml-2" onClick={() => void ext.detect({ retries: 2 })}>Yeniden ara</Button>}
+            </span>
           </div>
           <p className="mt-2 text-[12px] text-muted">
             Gerçek pazar aramaları eklenti üzerinden, senin oturumunla, arka planda açılan sekmelerde çalışır. Eklenti yoksa katalog ve aramalar sahte veriyle sürer.
+            {ext.wanted && <span className="text-warning"> Şu an “gerçek pazarlar” seçili ama eklenti yok: sahte veri gösteriliyor.</span>}
           </p>
-          {ext.installed && (
-            <div className="mt-3">
-              <div className="flex items-center justify-between">
-                <div className="text-[12px] font-medium uppercase tracking-wide text-muted">Pazar oturumları ve sağlık</div>
-                <div className="flex items-center gap-2">
-                  {progress && <span className="text-[12px] text-muted tnum">{progress}</span>}
-                  <Button size="sm" onClick={() => void runHealth()} disabled={checking}>
-                    {checking ? "Kontrol ediliyor…" : "Ana 4 pazar"}
-                  </Button>
-                  <Button size="sm" variant="primary" onClick={() => void runRound()} disabled={checking}>
-                    Kalibrasyon turu (açık pazarlar, sırayla)
-                  </Button>
-                </div>
-              </div>
-              <ul className="mt-2 divide-y divide-border text-[13px]">
-                {reg.all().map((a) => {
-                  const sess = ext.sessions[a.id] ?? "unknown";
-                  const h = health[a.id];
-                  return (
-                    <li key={a.id} className="flex items-center gap-3 py-2">
-                      <span className={cn("inline-block h-2 w-2 rounded-full", h ? (h.ok ? "bg-success" : "bg-danger") : sess === "logged-in" ? "bg-success" : sess === "logged-out" ? "bg-warning" : "bg-border")} />
-                      <span className="w-24 font-medium">{a.meta.name}</span>
-                      <span className="text-muted">{h ? h.message : SESSION_TR[sess]}</span>
-                      {a.meta.version.includes("beta") && (
-                        <button
-                          className="text-[12px] text-accent hover:underline"
-                          disabled={checking}
-                          onClick={async () => {
-                            setChecking(true);
-                            try {
-                              const r = await sendToExtension<ExtToWeb & { type: "health" }>({ type: "health", market: a.id }, 90000);
-                              setHealth((prev) => ({ ...prev, ...r.health }));
-                            } finally {
-                              setChecking(false);
-                            }
-                          }}
-                        >
-                          kontrol et
-                        </button>
-                      )}
-                      {sess === "logged-out" && a.meta.loginUrl && (
-                        <a href={a.meta.loginUrl} target="_blank" rel="noreferrer noopener" className="ml-auto text-accent hover:underline">
-                          Giriş yap ↗
-                        </a>
-                      )}
-                    </li>
-                  );
-                })}
-              </ul>
+          {!ext.info.installed && (
+            <div className="mt-3 rounded-md border border-border bg-surface-2 p-3 text-[13px]">
+              <div className="font-medium">Eklentiyi kurmak için</div>
+              <ol className="mt-1 list-decimal space-y-0.5 pl-5 text-muted">
+                <li>Depoda <code className="rounded bg-surface px-1">pnpm --filter @manufactogate/extension build</code> çalıştır; <code className="rounded bg-surface px-1">apps/extension/dist</code> oluşur.</li>
+                <li>Chrome'da <code className="rounded bg-surface px-1">chrome://extensions</code> → sağ üstte “Geliştirici modu”nu aç.</li>
+                <li>“Paketlenmemiş öğe yükle” → <code className="rounded bg-surface px-1">dist</code> klasörünü seç.</li>
+                <li>Bu sayfayı yenile; sağ üstteki nokta yeşile döner. Eklentiyi her güncellediğinde bu sekmeyi de yenile.</li>
+              </ol>
+            </div>
+          )}
+          {ext.info.installed && (
+            <div className="mt-3 flex flex-wrap items-center gap-2">
+              <span className="text-[12px] font-medium uppercase tracking-wide text-muted">Sağlık kontrolü</span>
+              {ext.progress && <span className="text-[12px] text-muted tnum">{ext.progress}</span>}
+              <span className="ml-auto flex flex-wrap gap-2">
+                {ext.checking ? (
+                  <Button size="sm" variant="danger" onClick={ext.stop}>Durdur</Button>
+                ) : (
+                  <>
+                    <Button size="sm" onClick={() => void ext.runHealth()}>Ana 4 pazar</Button>
+                    <Button size="sm" variant="primary" onClick={() => void ext.runRound(s.enabledMarkets)} disabled={!s.enabledMarkets.length}>
+                      Kalibrasyon turu ({s.enabledMarkets.length} açık pazar, sırayla)
+                    </Button>
+                  </>
+                )}
+              </span>
+              <p className="w-full text-[12px] text-muted">Sonuçlar bu cihazda saklanır; pazar satırlarında ve Panel'de görünür. 24 saatten eski sonuçlar “eski” olarak işaretlenir.</p>
             </div>
           )}
         </Card>
       </section>
 
+      {/* ---- Markets ---- */}
       <section className="mt-6">
-        <h2 className="mb-2 text-[12px] font-medium uppercase tracking-wide text-muted">Pazarlar</h2>
-        <p className="mb-2 text-[12px] text-muted">Beta pazarlar genel kart okuma ile çalışır; bir pazar boş dönerse o pazarın arama sayfasını "Fixture yakala" ile gönder, kalibre edelim.</p>
-        <Card className="divide-y divide-border">
-          {[...reg.all()].sort((a, b) => Number(a.meta.version.includes("beta")) - Number(b.meta.version.includes("beta"))).map((a) => {
-            const on = s.enabledMarkets.includes(a.id);
+        <div className="mb-2 flex flex-wrap items-center gap-2">
+          <h2 className="text-[12px] font-medium uppercase tracking-wide text-muted">Pazarlar</h2>
+          <span className="text-[12px] text-muted tnum">{s.enabledMarkets.length}/{all.length} açık</span>
+          <div className="ml-auto flex flex-wrap gap-1" role="group" aria-label="Hazır seçimler">
+            <button type="button" className="chip" onClick={() => applyPreset("working")} title="Son sağlık kontrolünde sonuç veren pazarlar; kontrol yoksa tarayıcıda doğrulanan 9 pazar">Çalışanlar</button>
+            <button type="button" className="chip" onClick={() => applyPreset("verified")} title="Beta olmayan, kalibre edilmiş pazarlar">Doğrulananlar</button>
+            <button type="button" className="chip" onClick={() => applyPreset("target")}>Hedef ülke pazarları</button>
+            <button type="button" className="chip" onClick={() => applyPreset("all")}>Hepsi</button>
+            <button type="button" className="chip" onClick={() => applyPreset("none")}>Hiçbiri</button>
+          </div>
+        </div>
+        <p className="mb-2 text-[12px] text-muted">Beta pazarlar genel kart okuma ile çalışır; bir pazar boş dönerse arama sayfasını “Fixture yakala” ile kaydet, kalibre edelim.</p>
+        <div className="space-y-3">
+          {groups.map(({ region, adapters }) => {
+            const ids = adapters.map((a) => a.id);
+            const on = ids.filter((id) => enabledSet.has(id)).length;
             return (
-              <label key={a.id} className="flex cursor-pointer items-center gap-3 px-3 py-2.5 text-[13px] hover:bg-surface-2">
-                <input type="checkbox" checked={on} onChange={() => s.toggleMarket(a.id)} className="accent-[var(--accent)]" />
-                <span className="w-28 font-medium">{a.meta.name}</span>
-                <span className="text-muted">
-                  {a.meta.country.toUpperCase()} · {a.meta.currency} · {a.meta.role === "source" ? "tedarik" : a.meta.role === "target" ? "satış" : "ikisi"}
-                </span>
-                <span className="ml-auto flex items-center gap-2 text-[11px] text-muted">
-                  {a.meta.version.includes("beta") && <span className="rounded border border-warning/40 bg-warning/10 px-1 text-warning">beta</span>}
-                  {a.meta.capabilities.imageSearch ? "görsel" : ""} {a.meta.capabilities.textSearch ? "metin" : ""} {a.meta.capabilities.linkResolve ? "link" : ""} · v{a.meta.version}
-                </span>
-              </label>
+              <Card key={region}>
+                <div className="flex items-center gap-2 border-b border-border px-3 py-2 text-[13px]">
+                  <span className="market-dot" data-region={region} aria-hidden />
+                  <span className="font-medium">{REGION_LABELS_TR[region]}</span>
+                  <span className="text-[12px] text-muted tnum">{on}/{ids.length}</span>
+                  <span className="ml-auto flex gap-2 text-[12px]">
+                    <button type="button" className="text-accent hover:underline" onClick={() => toggleGroup(ids, true)}>tümü</button>
+                    <button type="button" className="text-muted hover:underline" onClick={() => toggleGroup(ids, false)}>hiçbiri</button>
+                  </span>
+                </div>
+                <ul className="divide-y divide-border">
+                  {adapters.map((a) => {
+                    const { h, sess, def, dot } = healthRow(a);
+                    const beta = a.meta.version.includes("beta");
+                    const checked = enabledSet.has(a.id);
+                    const searchUrl = def ? def.searchUrl(def.healthQuery) : null;
+                    return (
+                      <li key={a.id} className={cn("grid grid-cols-[auto_1fr] items-center gap-x-3 gap-y-1 px-3 py-2 text-[13px] sm:grid-cols-[auto_10rem_1fr_auto]", checked ? "" : "text-muted")}>
+                        <input type="checkbox" checked={checked} onChange={() => s.toggleMarket(a.id)} className="accent-[var(--accent)]" aria-label={`${a.meta.name} pazarını aç/kapat`} />
+                        <span className="flex min-w-0 items-center gap-2">
+                          <span className={cn("inline-block h-2 w-2 shrink-0 rounded-full", dot)} title={h ? h.message : sessionLabel(sess, !!a.meta.loginUrl)} />
+                          <span className="truncate font-medium text-text">{a.meta.name}</span>
+                          {beta && <Badge tone="warning">beta</Badge>}
+                        </span>
+                        <span className="col-span-2 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5 text-[12px] text-muted sm:col-span-1">
+                          <span>{a.meta.country.toUpperCase()} · {a.meta.currency} · {ROLE_TR[a.meta.role]}</span>
+                          <span className="hidden sm:inline">· {[a.meta.capabilities.imageSearch && "görsel", a.meta.capabilities.textSearch && "metin", a.meta.capabilities.linkResolve && "link"].filter(Boolean).join(" ")}</span>
+                          <span>· {sessionLabel(sess, !!a.meta.loginUrl)}</span>
+                          {h && (
+                            <span className={cn("truncate", h.ok ? "text-success" : "text-danger")} title={h.message}>
+                              · {h.ok ? "sağlıklı" : "sorun"}{h.message ? ` · ${h.message}` : ""} · {relTime(h.checkedAt)}
+                              {isStaleHealth(h) && <Badge tone="warning" className="ml-1">eski</Badge>}
+                            </span>
+                          )}
+                        </span>
+                        <span className="col-span-2 flex items-center gap-3 text-[12px] sm:col-span-1 sm:justify-end">
+                          {ext.info.installed && (
+                            <button type="button" className="text-accent hover:underline disabled:opacity-50" disabled={ext.checking} onClick={() => void ext.checkMarket(a.id)}>kontrol et</button>
+                          )}
+                          {(sess === "logged-out" || sess === "captcha" || (!h?.ok && a.meta.loginUrl && sess !== "logged-in")) && a.meta.loginUrl && (
+                            <a href={a.meta.loginUrl} target="_blank" rel="noreferrer noopener" className="text-accent hover:underline">Giriş yap ↗</a>
+                          )}
+                          {searchUrl && (
+                            <a href={searchUrl} target="_blank" rel="noreferrer noopener" className="text-muted hover:text-text hover:underline" title="Pazarın arama sayfasını yeni sekmede aç: giriş yapmak ya da fixture yakalamak için">Arama sayfası ↗</a>
+                          )}
+                        </span>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </Card>
             );
           })}
+        </div>
+        <Card className="mt-3 p-4 text-[13px]">
+          <div className="font-medium">Fixture yakala: boş dönen bir pazarı kalibre etmek için</div>
+          <ol className="mt-1 list-decimal space-y-0.5 pl-5 text-muted">
+            <li>Yukarıdaki “Arama sayfası ↗” ile pazarın arama sonuçlarını kendi hesabınla aç; gerekiyorsa giriş yap.</li>
+            <li>Sonuçlar görünürken eklenti simgesine tıkla → “Fixture yakala”. Sayfa HTML'i İndirilenler klasörüne iner.</li>
+            <li>Dosyayı paylaş; seçiciler buna göre kalibre edilir ve pazar bir sonraki sürümde doğrulanmış olur.</li>
+          </ol>
         </Card>
       </section>
 
+      {/* ---- Target country ---- */}
       <section className="mt-6">
         <h2 className="mb-2 text-[12px] font-medium uppercase tracking-wide text-muted">Hedef ülke</h2>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           {Object.values(COUNTRY_PROFILES).map((p) => (
             <button
               key={p.country}
+              type="button"
+              aria-pressed={s.targetCountry === p.country}
               onClick={() => s.setTargetCountry(p.country)}
               className={cn("rounded-md border px-3 py-1.5 text-[13px]", s.targetCountry === p.country ? "border-accent bg-accent/10 text-accent" : "border-border hover:bg-surface-2")}
               title={`Oranlar ${p.asOf} tarihli`}
@@ -172,46 +287,99 @@ export function Settings() {
             </button>
           ))}
         </div>
-        <div className="mt-3 flex items-center gap-2 text-[13px]">
+        <div className="mt-3 flex flex-wrap items-center gap-2 text-[13px]">
           <span className="text-muted">Gösterge para birimi</span>
           {DISPLAY_CURRENCIES.map((c) => (
-            <button key={c} onClick={() => s.setDisplayCurrency(c)} className={cn("rounded-md border px-2.5 py-1", s.displayCurrency === c ? "border-accent bg-accent/10 text-accent" : "border-border hover:bg-surface-2")}>
+            <button key={c} type="button" aria-pressed={s.displayCurrency === c} onClick={() => s.setDisplayCurrency(c)} className={cn("rounded-md border px-2.5 py-1", s.displayCurrency === c ? "border-accent bg-accent/10 text-accent" : "border-border hover:bg-surface-2")}>
               {c}
             </button>
           ))}
         </div>
-        <p className="mt-2 text-[12px] text-muted">Vergi ve kargo tabloları tarihli ve kaynaklıdır; Sprint 4'te düzenlenebilir hale gelir.</p>
+        <p className="mt-2 text-[12px] text-muted">Vergi ve kargo tabloları tarihli ve kaynaklıdır. Hedef ülkede satan en az bir pazar açık tutulur; aksi halde “satılır mı” analizi boş kalır.</p>
       </section>
 
+      {/* ---- Search depth ---- */}
+      <section className="mt-6">
+        <h2 className="mb-2 text-[12px] font-medium uppercase tracking-wide text-muted">Arama derinliği</h2>
+        <Card className="p-4 text-[13px]">
+          <div className="flex flex-wrap items-center gap-2">
+            <span>Pazar başına en çok</span>
+            {MAX_PER_MARKET_OPTIONS.map((n) => (
+              <button key={n} type="button" aria-pressed={s.search.maxPerMarket === n} onClick={() => s.setSearch({ maxPerMarket: n as MaxPerMarket })} className={cn("rounded-md border px-2.5 py-1 tnum", s.search.maxPerMarket === n ? "border-accent bg-accent/10 text-accent" : "border-border hover:bg-surface-2")}>
+                {n}
+              </button>
+            ))}
+            <span>sonuç</span>
+          </div>
+          <p className="mt-2 text-[12px] text-muted">Daha fazla sonuç = pazar başına daha fazla sayfa ve daha uzun açık kalan sekmeler. 600 ile 33 pazarda bir arama dakikalar sürebilir ve bazı pazarlar hız sınırı uygular; sorun çıkarsa 150'ye dön.</p>
+        </Card>
+      </section>
+
+      {/* ---- Cost assumptions ---- */}
       <section className="mt-6">
         <h2 className="mb-2 text-[12px] font-medium uppercase tracking-wide text-muted">Maliyet varsayımları</h2>
         <Card className="grid gap-3 p-4 text-[13px] sm:grid-cols-2">
           <label className="flex items-center justify-between gap-3">
-            <span>Kur · 1 CNY = ? TRY</span>
-            <input type="number" step="0.01" value={s.cost.fxCnyTry} onChange={(e) => s.setCost({ fxCnyTry: Number(e.target.value) || 0 })} className="h-8 w-28 rounded-md border border-border bg-bg px-2 text-right tnum outline-none focus:border-accent" />
-          </label>
-          <label className="flex items-center justify-between gap-3">
             <span>Varsayılan ürün ağırlığı (kg)</span>
-            <input type="number" step="0.05" value={s.cost.defaultWeightKg} onChange={(e) => s.setCost({ defaultWeightKg: Number(e.target.value) || 0 })} className="h-8 w-28 rounded-md border border-border bg-bg px-2 text-right tnum outline-none focus:border-accent" />
+            <Input type="number" step="0.05" value={s.cost.defaultWeightKg} onChange={(e) => s.setCost({ defaultWeightKg: Number(e.target.value) || 0 })} className="w-28 text-right tnum" size="sm" />
           </label>
           <label className="flex items-center justify-between gap-3">
             <span>Kargo yöntemi</span>
-            <select value={s.cost.shippingKey} onChange={(e) => s.setCost({ shippingKey: e.target.value })} className="h-8 rounded-md border border-border bg-surface px-2">
+            <Select value={s.cost.shippingKey} onChange={(e) => s.setCost({ shippingKey: e.target.value })} className="w-auto" size="sm">
               {(COUNTRY_PROFILES[s.targetCountry]?.shipping ?? []).map((o) => (
                 <option key={o.key} value={o.key}>{o.label} · {o.transitDays[0]}-{o.transitDays[1]} gün</option>
               ))}
-            </select>
+            </Select>
           </label>
           <label className="flex items-center justify-between gap-3">
             <span>Reklam ve iade payı (satış fiyatının %)</span>
-            <input type="number" step="1" value={Math.round(s.cost.overheadRate * 100)} onChange={(e) => s.setCost({ overheadRate: (Number(e.target.value) || 0) / 100 })} className="h-8 w-28 rounded-md border border-border bg-bg px-2 text-right tnum outline-none focus:border-accent" />
+            <Input type="number" step="1" value={Math.round(s.cost.overheadRate * 100)} onChange={(e) => s.setCost({ overheadRate: (Number(e.target.value) || 0) / 100 })} className="w-28 text-right tnum" size="sm" />
           </label>
+        </Card>
+        <h3 className="mb-2 mt-4 text-[12px] font-medium uppercase tracking-wide text-muted">Kurlar · 1 birim = ? TRY</h3>
+        <Card className="grid gap-3 p-4 text-[13px] sm:grid-cols-2 lg:grid-cols-4">
+          {EDITABLE_FX.map((code) => {
+            const own = s.fxRates[code];
+            return (
+              <label key={code} className="flex items-center justify-between gap-3">
+                <span>
+                  {code}
+                  {own !== undefined && own !== FX_TO_TRY[code] && <button type="button" className="ml-2 text-[11px] text-accent hover:underline" onClick={() => s.setFxRate(code, null)}>varsayılan</button>}
+                </span>
+                <Input type="number" step="0.01" min="0" value={own ?? FX_TO_TRY[code] ?? ""} onChange={(e) => s.setFxRate(code, Number(e.target.value) || null)} className="w-28 text-right tnum" size="sm" aria-label={`${code} kuru`} />
+              </label>
+            );
+          })}
+          <p className="text-[12px] text-muted sm:col-span-2 lg:col-span-4">Kartlardaki “≈” tutarlar, analiz kartı ve indirilmiş maliyet aynı tabloyu kullanır. Varsayılan tablo {FX_AS_OF} tarihli göstergedir; canlı kur yoktur.</p>
         </Card>
       </section>
 
+      {/* ---- Data ---- */}
       <section className="mt-6">
         <h2 className="mb-2 text-[12px] font-medium uppercase tracking-wide text-muted">Veri</h2>
-        <p className="text-[13px] text-muted">Tüm veriler bu tarayıcıda saklanır. Sunucuya hiçbir şey gönderilmez.</p>
+        <Card className="p-4 text-[13px]">
+          <div className="flex flex-wrap items-center gap-x-6 gap-y-1 text-muted">
+            <span>Tüm veriler bu tarayıcıda saklanır; sunucuya hiçbir şey gönderilmez.</span>
+            {storage && <span className="tnum">{formatBytes(storage.usage)} kullanılıyor{storage.quota ? ` · ${formatBytes(storage.quota)} kota` : ""}</span>}
+            {counts && <span className="tnum">{counts.listings} ilan · {counts.searches} arama · {counts.watches} izleme · {counts.projects} proje</span>}
+          </div>
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            <Button onClick={() => void doExport()} disabled={busy}>Yedeği indir</Button>
+            <Select size="sm" value={importMode} onChange={(e) => setImportMode(e.target.value as "merge" | "replace")} aria-label="Yükleme biçimi" className="w-auto">
+              <option value="merge">Birleştir</option>
+              <option value="replace">Değiştir</option>
+            </Select>
+            <Button onClick={() => fileRef.current?.click()} disabled={busy}>Yedek yükle</Button>
+            <input ref={fileRef} type="file" accept="application/json,.json" className="hidden" onChange={(e) => void doImport(e.target.files?.[0])} />
+          </div>
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            <span className="text-muted">Sil:</span>
+            <Button size="sm" variant="danger" disabled={busy} onClick={() => void doClear("history", "Arama geçmişi (projeler ve izlenenler korunur)")}>geçmiş</Button>
+            <Button size="sm" variant="danger" disabled={busy} onClick={() => void doClear("watches", "İzleme listesi")}>izleme</Button>
+            <Button size="sm" variant="danger" disabled={busy} onClick={() => void doClear("projects", "Projeler")}>projeler</Button>
+            <Button size="sm" variant="danger" disabled={busy} onClick={() => void doClear("settings", "Ayarlar")}>ayarlar</Button>
+          </div>
+        </Card>
       </section>
     </div>
   );

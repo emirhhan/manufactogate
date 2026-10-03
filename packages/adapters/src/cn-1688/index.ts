@@ -1,8 +1,8 @@
 import type { LinkInfo, RawListing, RawListingDetail, RawSupplier } from "@manufactogate/core";
 import { BADGES_1688 } from "../badges";
-import { clean, extractCards, extractJsonAfter, get, inlineScriptText, parseCount, parsePrice, readEmbedded, scriptField, tryJson } from "../dom";
+import { clean, detectLang, extractCards, extractJsonAfter, get, inlineScriptText, parseCount, parsePrice, readEmbedded, scriptField, tryJson } from "../dom";
 import { META_1688 } from "../markets";
-import { detectSession, type RealMarketDef, type SearchItem, type SearchPayload, type DetailPayload, type SupplierPayload } from "../runtime";
+import { detectSession, pageProbe, type RealMarketDef, type SearchItem, type SearchPayload, type DetailPayload, type SupplierPayload } from "../runtime";
 import type { PageExtractor } from "../runtime";
 
 /**
@@ -22,9 +22,19 @@ export const extractor1688: PageExtractor = {
   session(doc) {
     return detectSession(doc, {
       loginHosts: /login\.1688\.com|login\.taobao\.com|passport/,
-      captchaMarkers: ["punish", "nocaptcha", "_____tmd_____", "滑动验证", "验证码"],
-      loggedOutMarkers: ["id=\"login-form\"", "密码登录", "扫码登录", "fm-login-id"],
-      loggedInMarkers: ["\"loginId\"", "memberId", "退出", "我的阿里", "data-complete-offer-id", "frontSellerMemberId"],
+      captchaHosts: /punish|_____tmd_____|nocaptcha/,
+      captchaMarkers: ["滑动验证", "请完成验证", "拖动滑块", "请输入验证码"],
+      loggedOutMarkers: ["密码登录", "扫码登录"],
+      loggedOutSelectors: ["#login-form", "#fm-login-id", "input[name='fm-login-id']"],
+      loggedInMarkers: ["退出", "我的阿里", "Çıkış", "Hesabım"],
+      loggedInSelectors: ["[data-complete-offer-id]", "[data-offer-expose-id]"],
+      scriptMarkers: { loggedIn: ['"loginId"', "frontSellerMemberId", '"memberId"'] },
+    });
+  },
+  probe(doc) {
+    return pageProbe(doc, {
+      noResultsMarkers: ["没有找到", "没有找到相关", "暂无相关商品", "sonuç bulunamadı"],
+      resultsUrlPattern: /s\.1688\.com\/(?:selloffer|youyuan)|1688\.com\/.*(?:keywords|imageAddress)=/,
     });
   },
 
@@ -53,6 +63,8 @@ export const extractor1688: PageExtractor = {
           id,
           url: `https://detail.1688.com/offer/${id}.html`,
           title,
+          // The i18n grid localises titles for the browser language; flag it so the web app does not treat them as Chinese.
+          titleLang: detectLang(title),
           image: img?.getAttribute("src") || img?.getAttribute("data-src") || null,
           price,
           priceText: price !== null ? String(price) : null,
@@ -62,6 +74,7 @@ export const extractor1688: PageExtractor = {
           badges: BADGE_WORDS.filter((w) => text.includes(w)),
           text,
           currency: "CNY",
+          priceCurrency: "CNY",
           moq: moq ?? null,
         });
       }
@@ -198,9 +211,13 @@ export const extractor1688: PageExtractor = {
 
 export const def1688: RealMarketDef = {
   id: "cn-1688",
-  meta: { ...META_1688, version: "0.1.0" },
+  meta: { ...META_1688, version: "0.2.0" },
   badgeMap: BADGES_1688,
   healthQuery: "蓝牙耳机",
+  homeUrl: "https://www.1688.com/",
+  resultsUrlPattern: /s\.1688\.com\/(?:selloffer|youyuan)|1688\.com\/.*(?:keywords|imageAddress)=/,
+  noResultsMarkers: ["没有找到", "暂无相关商品"],
+  calibration: "live",
   searchUrl: (q, page = 1) => `https://s.1688.com/selloffer/offer_search.htm?keywords=${encodeURIComponent(q)}${page > 1 ? `&beginPage=${page}` : ""}`,
   maxPages: 3,
   imageSearchUrl: (input) => {

@@ -52,14 +52,18 @@ export type AdapterErrorType =
   | "SelectorBroken"
   | "RateLimited"
   | "NotFound"
-  | "Network";
+  | "Network"
+  /** The market did not answer within the orchestrator's per-market deadline. */
+  | "Timeout"
+  /** A bug on our side (TypeError, RangeError, decode failure), not the market's. */
+  | "Internal";
 
 export class AdapterError extends Error {
   constructor(
     public readonly type: AdapterErrorType,
     public readonly market: MarketId,
     message?: string,
-    public readonly retryable = type === "RateLimited" || type === "Network",
+    public readonly retryable = type === "RateLimited" || type === "Network" || type === "Timeout",
   ) {
     super(message ?? `${market}: ${type}`);
     this.name = "AdapterError";

@@ -2,11 +2,24 @@
 <html lang="tr">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <meta name="color-scheme" content="light dark" />
+    <meta name="theme-color" media="(prefers-color-scheme: light)" content="#fafaf9" />
+    <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#0f1115" />
+    <meta name="description" content="Çok pazarlı tedarik araştırması: ürünü bul, kaynağına in, maliyetini gör. Sunucusuz, kendi oturumunla." />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
     <title>Manufactogate</title>
-    <link rel="preconnect" href="https://rsms.me/" />
-    <link rel="stylesheet" href="https://rsms.me/inter/inter.css" />
+    <script>
+      // Apply the explicit theme before first paint so a dark preference never flashes light.
+      try {
+        var t = localStorage.getItem("mg-theme");
+        if (t === "dark" || t === "light") document.documentElement.setAttribute("data-theme", t);
+      } catch (e) {}
+    </script>
+    <link rel="preconnect" href="https://rsms.me/" crossorigin />
+    <!-- Non-blocking: the system font stack renders immediately; Inter swaps in when it arrives (or never, offline). -->
+    <link rel="stylesheet" href="https://rsms.me/inter/inter.css" media="print" onload="this.media='all'" />
+    <noscript><link rel="stylesheet" href="https://rsms.me/inter/inter.css" /></noscript>
   </head>
   <body>
     <div id="root"></div>

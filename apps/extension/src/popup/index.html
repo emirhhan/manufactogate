@@ -4,35 +4,77 @@
     <meta charset="UTF-8" />
     <title>Manufactogate</title>
     <style>
-      :root { --bg:#fafaf9; --surface:#fff; --border:#e6e4e0; --text:#1a1a1a; --muted:#6b6b6b; --accent:#1f4fd8; --ok:#1e7f4f; --warn:#b7791f; --bad:#b42318; }
-      @media (prefers-color-scheme: dark) { :root { --bg:#0f1115; --surface:#171a21; --border:#262a33; --text:#e8e8e6; --muted:#9a9a98; --accent:#5b8cff; --ok:#4cc38a; --warn:#e0a84a; --bad:#f0665c; } }
-      body { margin:0; width:360px; background:var(--bg); color:var(--text); font:13px/1.5 Inter, system-ui, sans-serif; }
-      header { display:flex; align-items:center; gap:8px; padding:10px 12px; border-bottom:1px solid var(--border); font-weight:600; }
+      :root { --bg:#fafaf9; --surface:#fff; --border:#e6e4e0; --text:#1a1a1a; --muted:#6b6b6b; --accent:#1f4fd8; --ok:#1e7f4f; --warn:#b7791f; --bad:#b42318; --soft:#eef2fb; }
+      @media (prefers-color-scheme: dark) { :root { --bg:#0f1115; --surface:#171a21; --border:#262a33; --text:#e8e8e6; --muted:#9a9a98; --accent:#5b8cff; --ok:#4cc38a; --warn:#e0a84a; --bad:#f0665c; --soft:#1b2233; } }
+      * { box-sizing:border-box; }
+      body { margin:0; width:400px; max-height:600px; overflow:auto; background:var(--bg); color:var(--text); font:13px/1.5 Inter, system-ui, sans-serif; }
+      header { position:sticky; top:0; z-index:2; display:flex; align-items:center; gap:8px; padding:10px 12px; background:var(--bg); border-bottom:1px solid var(--border); font-weight:600; }
       header i { width:12px; height:12px; background:var(--accent); border-radius:3px; }
       header small { margin-left:auto; color:var(--muted); font-weight:400; }
-      ul { list-style:none; margin:0; padding:6px 0; }
-      li { display:grid; grid-template-columns: 10px 84px 1fr auto; align-items:center; gap:8px; padding:7px 12px; }
-      li b { font-weight:500; }
+      #status { display:flex; align-items:center; gap:8px; padding:6px 12px; font-size:12px; color:var(--muted); border-bottom:1px solid var(--border); background:var(--soft); }
+      #status b { color:var(--text); font-weight:500; }
+      #status .spacer { flex:1; }
+      .tools { display:flex; gap:8px; padding:8px 12px; }
+      .tools input { flex:1; height:28px; border:1px solid var(--border); border-radius:6px; padding:0 8px; background:var(--surface); color:var(--text); font:inherit; font-size:12px; }
+      h3 { margin:6px 12px 0; font-size:11px; font-weight:600; letter-spacing:.04em; text-transform:uppercase; color:var(--muted); }
+      ul { list-style:none; margin:0; padding:4px 0; }
+      li { display:grid; grid-template-columns: 10px 96px 1fr auto; align-items:center; gap:8px; padding:6px 12px; }
+      li:hover { background:var(--soft); }
+      li b { font-weight:500; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
       li span { color:var(--muted); font-size:12px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+      li .acts { display:flex; gap:8px; }
       .dot { width:8px; height:8px; border-radius:50%; background:var(--border); }
-      .ok .dot { background:var(--ok); } .warn .dot { background:var(--warn); } .bad .dot { background:var(--bad); }
+      .ok .dot { background:var(--ok); } .warn .dot { background:var(--warn); } .bad .dot { background:var(--bad); } .busy .dot { background:var(--accent); animation: pulse 1s infinite alternate; }
+      @keyframes pulse { from { opacity:.35 } to { opacity:1 } }
       a, button.link { color:var(--accent); text-decoration:none; font-size:12px; background:none; border:0; padding:0; cursor:pointer; font-family:inherit; }
+      button.link:disabled { color:var(--muted); cursor:default; }
       .row { display:flex; gap:8px; padding:8px 12px; border-top:1px solid var(--border); }
       button.btn { flex:1; height:30px; border:1px solid var(--border); background:var(--surface); color:var(--text); border-radius:6px; cursor:pointer; font-family:inherit; font-size:12px; }
       button.btn:disabled { opacity:.5; cursor:default; }
+      details { border-top:1px solid var(--border); padding:6px 12px; }
+      summary { cursor:pointer; color:var(--muted); font-size:12px; }
+      .settings { display:grid; grid-template-columns: 1fr auto; gap:6px 12px; align-items:center; padding:8px 0 4px; font-size:12px; }
+      .settings select, .settings input[type=text] { height:26px; border:1px solid var(--border); border-radius:6px; background:var(--surface); color:var(--text); font:inherit; font-size:12px; padding:0 6px; }
+      .settings input[type=text] { width:170px; }
       footer { padding:8px 12px; border-top:1px solid var(--border); color:var(--muted); font-size:12px; }
-      #msg { padding:0 12px 8px; color:var(--muted); font-size:12px; min-height:16px; }
+      #msg { padding:0 12px 8px; color:var(--muted); font-size:12px; min-height:16px; white-space:pre-line; }
+      .hidden { display:none; }
     </style>
   </head>
   <body>
     <header><i></i> Manufactogate <small id="ver"></small></header>
-    <ul id="markets"></ul>
+    <div id="status"><span id="statusText">Bağlanıyor…</span><span class="spacer"></span><button class="link" id="closeTabs" title="Eklentinin açtığı tüm pazar sekmelerini kapat ve kuyruğu boşalt">Sekmeleri kapat</button></div>
+    <div class="tools"><input id="filter" type="search" placeholder="Pazar ara (ör. Amazon, Shopee)" autocomplete="off" /></div>
+    <h3>Ana pazarlar</h3>
+    <ul id="main"></ul>
+    <h3>Beta pazarlar</h3>
+    <ul id="beta"></ul>
     <div id="msg"></div>
     <div class="row">
-      <button class="btn" id="health">Sağlık kontrolü çalıştır</button>
+      <button class="btn" id="health" title="Dört ana pazarda gerçek arama yolu denenir">Ana pazar sağlığı</button>
+      <button class="btn" id="openLogins" title="Giriş ya da doğrulama bekleyen pazarların sayfalarını arka planda açar">Giriş gerekenleri aç</button>
       <button class="btn" id="capture" title="Açık sekmedeki pazar sayfasını kalibrasyon için kaydet">Fixture yakala</button>
     </div>
-    <footer>Aramalar kendi oturumunla, arka planda açılan sekmelerde çalışır. <a href="http://localhost:5173" target="_blank" rel="noreferrer">Uygulamayı aç ↗</a></footer>
+    <details>
+      <summary>Ayarlar</summary>
+      <div class="settings">
+        <label for="maxTabs">Eşzamanlı pazar sekmesi</label>
+        <select id="maxTabs"><option>1</option><option>2</option><option>3</option><option>4</option><option>5</option><option>6</option></select>
+        <label for="separateWindow">Pazar sekmeleri ayrı pencerede açılsın</label>
+        <input type="checkbox" id="separateWindow" />
+        <label for="tempo">Pazar temposu</label>
+        <select id="tempo"><option value="1">normal</option><option value="2">nazik (×2 aralık)</option><option value="4">çok nazik (×4 aralık)</option></select>
+        <label for="captchaWait">Doğrulama için bekleme</label>
+        <select id="captchaWait"><option value="60000">1 dk</option><option value="120000">2 dk</option><option value="300000">5 dk</option><option value="0">bekleme (hemen bildir)</option></select>
+        <label for="notifications">Sistem bildirimi (doğrulama, giriş)</label>
+        <input type="checkbox" id="notifications" />
+        <label for="overlay">Ürün sayfalarında karşılaştırma kutusu</label>
+        <input type="checkbox" id="overlay" />
+        <label for="appOrigin">Uygulama adresi</label>
+        <input type="text" id="appOrigin" spellcheck="false" />
+      </div>
+    </details>
+    <footer>Aramalar kendi oturumunla, arka planda açılan sekmelerde çalışır. <a id="appLink" href="http://localhost:5173" target="_blank" rel="noreferrer">Uygulamayı aç ↗</a></footer>
     <script type="module" src="./main.ts"></script>
   </body>
 </html>

@@ -16,6 +16,20 @@
   --warning: #b7791f;
   --danger: #b42318;
   --ring: #1f4fd8;
+  /* Chips drawn over product images: readable on any photo in both themes. */
+  --overlay: rgba(255, 255, 255, 0.92);
+  --overlay-fg: #1a1a1a;
+  --hero-from: #ffffff;
+  --hero-to: #eef3ff;
+  /* Market identity hues by region; cards and dashboards use these instead of brand colours. */
+  --m-cn: #d9480f;
+  --m-tr: #e8590c;
+  --m-asia: #2b8a3e;
+  --m-jpkr: #c2255c;
+  --m-west: #1c7ed6;
+  --m-me: #e67700;
+  --m-ru: #7048e8;
+  --m-global: #0b7285;
   color-scheme: light;
 }
 @media (prefers-color-scheme: dark) {
@@ -34,6 +48,18 @@
     --ring: #5b8cff;
     --shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
     --shadow-md: 0 8px 20px -6px rgba(0, 0, 0, 0.6);
+    --overlay: rgba(15, 17, 21, 0.85);
+    --overlay-fg: #e8e8e6;
+    --hero-from: #171a21;
+    --hero-to: #1a2238;
+    --m-cn: #ff922b;
+    --m-tr: #ffa94d;
+    --m-asia: #69db7c;
+    --m-jpkr: #faa2c1;
+    --m-west: #74c0fc;
+    --m-me: #ffd43b;
+    --m-ru: #b197fc;
+    --m-global: #66d9e8;
     color-scheme: dark;
   }
 }
@@ -50,6 +76,20 @@
   --warning: #e0a84a;
   --danger: #f0665c;
   --ring: #5b8cff;
+  --shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --shadow-md: 0 8px 20px -6px rgba(0, 0, 0, 0.6);
+  --overlay: rgba(15, 17, 21, 0.85);
+  --overlay-fg: #e8e8e6;
+  --hero-from: #171a21;
+  --hero-to: #1a2238;
+  --m-cn: #ff922b;
+  --m-tr: #ffa94d;
+  --m-asia: #69db7c;
+  --m-jpkr: #faa2c1;
+  --m-west: #74c0fc;
+  --m-me: #ffd43b;
+  --m-ru: #b197fc;
+  --m-global: #66d9e8;
   color-scheme: dark;
 }
 
@@ -65,6 +105,8 @@
   --color-success: var(--success);
   --color-warning: var(--warning);
   --color-danger: var(--danger);
+  --color-overlay: var(--overlay);
+  --color-overlay-fg: var(--overlay-fg);
   --font-sans: "Inter", "InterVariable", ui-sans-serif, system-ui, "Noto Sans CJK SC", "PingFang SC", sans-serif;
 }
 
@@ -118,3 +160,95 @@ body {
   .print\:hidden, header, footer { display: none !important; }
   body { background: #fff; color: #000; }
 }
+
+/* Form fields: one look everywhere, with a visible keyboard focus ring (outline-none alone fails AA). */
+.field {
+  height: 36px;
+  width: 100%;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  padding: 0 10px;
+  font-size: 13px;
+  color: var(--text);
+  outline: none;
+  transition: border-color 120ms ease, box-shadow 120ms ease;
+}
+.field::placeholder { color: var(--muted); }
+.field:hover { border-color: color-mix(in srgb, var(--border) 40%, var(--muted)); }
+.field:focus-visible {
+  border-color: var(--accent);
+  outline: 2px solid var(--ring);
+  outline-offset: 1px;
+}
+.field:disabled { opacity: 0.6; cursor: not-allowed; }
+textarea.field { height: auto; padding: 8px 10px; line-height: 1.45; resize: vertical; }
+select.field { padding-right: 28px; background-color: var(--surface); }
+.field-sm { height: 30px; font-size: 12px; padding: 0 8px; }
+.field-ghost { background: transparent; border-color: transparent; }
+.field-ghost:hover { border-color: var(--border); }
+
+/* Hero */
+.hero {
+  background: linear-gradient(135deg, var(--hero-from) 0%, var(--hero-to) 100%);
+  position: relative;
+  overflow: hidden;
+}
+.hero::before {
+  content: "";
+  position: absolute;
+  inset: -40% -10% auto auto;
+  width: 60%;
+  aspect-ratio: 1;
+  border-radius: 9999px;
+  background: radial-gradient(closest-side, color-mix(in srgb, var(--accent) 18%, transparent), transparent 70%);
+  pointer-events: none;
+}
+
+/* Skeletons */
+.skeleton {
+  background: linear-gradient(90deg, var(--surface-2) 25%, color-mix(in srgb, var(--surface-2) 60%, var(--surface)) 50%, var(--surface-2) 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.4s linear infinite;
+  border-radius: 6px;
+}
+@keyframes shimmer {
+  from { background-position: 200% 0; }
+  to { background-position: -200% 0; }
+}
+
+/* Toasts */
+.toast-enter { animation: toast-in 160ms ease-out; }
+@keyframes toast-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* Skip link for keyboard users */
+.skip-link {
+  position: absolute;
+  left: 8px;
+  top: -40px;
+  z-index: 50;
+  padding: 6px 10px;
+  border-radius: 6px;
+  background: var(--accent);
+  color: var(--accent-fg);
+  font-size: 13px;
+}
+.skip-link:focus { top: 8px; }
+
+/* Market identity dot by region */
+.market-dot { display: inline-block; width: 8px; height: 8px; border-radius: 9999px; background: var(--m-global); }
+.market-dot[data-region="cn"] { background: var(--m-cn); }
+.market-dot[data-region="tr"] { background: var(--m-tr); }
+.market-dot[data-region="asia"] { background: var(--m-asia); }
+.market-dot[data-region="jpkr"] { background: var(--m-jpkr); }
+.market-dot[data-region="west"] { background: var(--m-west); }
+.market-dot[data-region="me"] { background: var(--m-me); }
+.market-dot[data-region="ru"] { background: var(--m-ru); }
+
+/* Horizontal rails on narrow screens */
+.rail { display: flex; gap: 12px; overflow-x: auto; scroll-snap-type: x mandatory; padding-bottom: 6px; -webkit-overflow-scrolling: touch; }
+.rail > * { flex: 0 0 160px; scroll-snap-align: start; }
+@media (min-width: 640px) { .rail > * { flex-basis: 190px; } }

@@ -2,7 +2,7 @@ import type { LinkInfo, RawListing, RawListingDetail } from "@manufactogate/core
 import { BADGES_TAOBAO } from "../badges";
 import { clean, extractCards, extractJsonAfter, get, inlineScriptText, parseCount, parsePrice, readEmbedded, textOf, tryJson } from "../dom";
 import { META_TAOBAO } from "../markets";
-import { detectSession, type PageExtractor, type RealMarketDef, type SearchItem } from "../runtime";
+import { detectSession, pageProbe, type PageExtractor, type RealMarketDef, type SearchItem } from "../runtime";
 
 /**
  * Taobao / Tmall. Retail reference market.
@@ -19,9 +19,18 @@ export const extractorTaobao: PageExtractor = {
   session(doc) {
     return detectSession(doc, {
       loginHosts: /login\.taobao\.com|login\.tmall\.com|passport/,
-      captchaMarkers: ["punish", "nocaptcha", "_____tmd_____", "滑动验证"],
-      loggedOutMarkers: ["id=\"login\"", "密码登录", "扫码登录", "fm-login-id"],
-      loggedInMarkers: ["退出", "我的淘宝", "\"nick\""],
+      captchaHosts: /punish|_____tmd_____|nocaptcha/,
+      captchaMarkers: ["滑动验证", "请完成验证", "拖动滑块", "请输入验证码"],
+      loggedOutMarkers: ["密码登录", "扫码登录"],
+      loggedOutSelectors: ["#login", "#fm-login-id", "input[name='fm-login-id']"],
+      loggedInMarkers: ["退出", "我的淘宝"],
+      scriptMarkers: { loggedIn: ['"nick"', '"loginId"'] },
+    });
+  },
+  probe(doc) {
+    return pageProbe(doc, {
+      noResultsMarkers: ["没有找到相关宝贝", "没有找到", "抱歉，没有找到"],
+      resultsUrlPattern: /s\.taobao\.com\/search|list\.tmall\.com\/search/,
     });
   },
   search(doc): SearchItem[] {
@@ -164,9 +173,13 @@ export const extractorTaobao: PageExtractor = {
 
 export const defTaobao: RealMarketDef = {
   id: "cn-taobao",
-  meta: { ...META_TAOBAO, version: "0.1.0" },
+  meta: { ...META_TAOBAO, version: "0.2.0" },
   badgeMap: BADGES_TAOBAO,
   healthQuery: "蓝牙耳机",
+  homeUrl: "https://www.taobao.com/",
+  resultsUrlPattern: /s\.taobao\.com\/search|list\.tmall\.com\/search/,
+  noResultsMarkers: ["没有找到相关宝贝", "没有找到"],
+  calibration: "live",
   searchUrl: (q, page = 1) => `https://s.taobao.com/search?q=${encodeURIComponent(q)}&tab=all${page > 1 ? `&page=${page}` : ""}`,
   maxPages: 3,
   imageSearchUrl: () => ({ url: "https://s.taobao.com/search?tab=all", upload: true }),

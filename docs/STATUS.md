@@ -97,3 +97,13 @@ Güncelleme: 2026-10-03. "Doğrulandı" = kullanıcının tarayıcısında gerç
 Keşfet feed'i cihazdaki gerçek ilanlardan kurulur: marj adayları (tedarik ile hedef pazar benzeri arasında ≥2× fark),
 öne çıkanlar (tazelik, satış, puan, pazar çeşitliliği), kullanıcının kategorileri, çok satanlar, son aramalar ve izlenenler.
 Sunucu yok; algoritma apps/web/src/lib/feed.ts.
+
+## Web kabuğu notları (2026-10-03, kabuk/feed/ayarlar turu)
+
+- **Yerel veri şeması v3**: `listings` artık `market:id` başına tek kanonik satır; bir ilanın hangi aramalardan geldiği `searchItems` (`[searchId+key]`, `order`) tablosunda. Geçmişten açılan aramalar küçülmez, sıralama korunur. Küme eşleşmelerinin ince kopyası `matches` tablosunda; ana sayfa feed'i parmak izi yüklemeden oradan okur. Yazımlar `persistListings(searchId, batch)` / `persistClusters` üzerinden (lib/db.ts); `Listing.tsx` ve diğer sayfalar aynı yardımcıları kullanabilir (`searchId` alanı artık okunmaz).
+- **Arama deposu (store/search.ts)**: `error`, `storageNote`, `warning`, `cancelled`, `retrying`, `retryRemaining()` alanları eklendi. `cancel()` arama kaydını `status: "cancelled"` ile kapatır ve bitmemiş pazarları `done { cancelled: true }` yapar; Results bu durumda "Durduruldu" ve "Kalanları yeniden dene" (`retryRemaining`) gösterebilir. `SearchRecord` artık `status`, `resultCount`, `durationMs`, `marketStatus`, `error` taşır ve `load()` bunları geri yükler.
+- **Link yapıştırma**: SearchBox tanınan bir ilan linkini `/l/resolve/<url>?compare=1` ile açar (Listing sayfası `compare=1` ile karşılaştırmayı kendisi başlatır); tek sonuçlu "link araması" yalnızca tanınmayan linklerde metin olarak çalışır.
+- **Eklenti canlılığı**: `lib/bridge.ts` `ping()`, `ensureAlive()` (5 sn önbellek) ve kalp atışı ile kopan içerik betiğini saniyeler içinde yakalar; `ExtensionInfo.orphaned` + üst şerit uyarısı. Veri kaynağı artık `useExtension().dataSource` (reaktif); `getDataSource()` yalnızca React dışı kod için.
+- **Ayarlar**: pazarlar bölgeye göre gruplu, hazır seçimler (Çalışanlar/Doğrulananlar/Hedef ülke/Hepsi/Hiçbiri), sağlık sonuçları `settings.health` altında kalıcı, arama derinliği (150/300/600), kur tablosu (CNY/USD/EUR/GBP), yedek al/yükle ve türüne göre silme.
+- **Yeni sayfalar/bileşenler**: `/dashboard` (Panel), başlangıç listesi (Onboarding), toast, iskelet ve form primitifleri (`components/ui.tsx`), gerçek katalog sınıflandırıcısı için İngilizce/Almanca/Rusça/Japonca/Korece eş anlamlılar (`lib/categorySynonyms.ts`).
+- **Testler**: apps/web artık happy-dom + fake-indexeddb ile çalışır (`apps/web/test/*`): şema yükseltme, arama deposu (iptal/yeniden dene/depolama hatası), feed, sınıflandırıcı, izleme, ayarlar, köprü canlılığı.

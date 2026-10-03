@@ -1,0 +1,1536 @@
+[
+ {
+  "id": "helmet-ls2-rapid",
+  "query": {
+   "title": "LS2 RAPID 2 RACE MAT SİYAH KASK (siyah vizörlü + Spoıler)",
+   "altTitles": [
+    "LS2 RAPID 2 头盔",
+    "LS2 RAPID 2 helmet"
+   ],
+   "phash": "321a3efb48f4f9eb"
+  },
+  "candidates": [
+   {
+    "title": "LS2 FF353 Rapid 2 Mat Siyah Kapalı Kask",
+    "market": "tr-trendyol",
+    "label": "variant"
+   },
+   {
+    "title": "LS2 RAPID 2 摩托车头盔 哑光黑 全盔",
+    "market": "cn-1688",
+    "label": "same"
+   },
+   {
+    "title": "LS2 Rapid 2 Kask Vizörü Füme",
+    "market": "tr-trendyol",
+    "label": "accessory"
+   },
+   {
+    "title": "Blessed Kask Sticker – Motor Kaskı İçin Premium Yazı Kaligrafik Sticker",
+    "market": "tr-trendyol",
+    "label": "accessory"
+   },
+   {
+    "title": "Kask Taşıma ve Koruma Çantası – Siyah",
+    "market": "tr-trendyol",
+    "label": "accessory"
+   },
+   {
+    "title": "8 Renk Seçenekli Motosiklet Kaskı Şeytan Boynuzu(KASK DAHİL DEĞİL)",
+    "market": "tr-trendyol",
+    "label": "accessory"
+   },
+   {
+    "title": "Helix Mat Siyah Modüler Kask",
+    "market": "tr-trendyol",
+    "label": "different"
+   }
+  ],
+  "note": ""
+ },
+ {
+  "id": "helmet-ls2-rapid-img",
+  "query": {
+   "title": "LS2 RAPID 2 RACE MAT SİYAH KASK",
+   "phash": "321a3efb48f4f9eb"
+  },
+  "candidates": [
+   {
+    "title": "LS2 FF353 RAPID 2 full face helmet matt black",
+    "market": "us-amazon",
+    "label": "same",
+    "phash": "321a3efb48f4f9eb"
+   },
+   {
+    "title": "3C认证电动摩托车头盔男女四季通用盔秋冬保暖防雨防雾全盔安全帽",
+    "market": "cn-taobao",
+    "label": "different",
+    "phash": "d12a341e663b238b"
+   },
+   {
+    "title": "LS2 Rapid 2 visor smoke",
+    "market": "us-ebay",
+    "label": "accessory",
+    "phash": "843550d19de48451"
+   }
+  ],
+  "note": ""
+ },
+ {
+  "id": "helmet-arai",
+  "query": {
+   "title": "Arai RX-7V Evo Kask",
+   "altTitles": [
+    "Arai RX-7V Evo 头盔",
+    "Arai RX-7V Evo helmet"
+   ]
+  },
+  "candidates": [
+   {
+    "title": "Arai RX7 摩托车头盔女男机车全盔",
+    "market": "cn-1688",
+    "label": "variant",
+    "note": "RX7 family listing, not the RX-7V Evo"
+   },
+   {
+    "title": "Arai RX-7V Evo Diamond Black Helmet",
+    "market": "gb-amazon",
+    "label": "same"
+   },
+   {
+    "title": "Arai RX-7V Racing Pinlock Lens 镜片",
+    "market": "cn-taobao",
+    "label": "accessory"
+   },
+   {
+    "title": "NOLAN诺兰意大利Xlite X803RS摩托车赛车头盔碳纤维全盔赛道盔",
+    "market": "cn-pinduoduo",
+    "label": "different"
+   }
+  ],
+  "note": ""
+ },
+ {
+  "id": "helmet-generic-zh",
+  "query": {
+   "title": "motosiklet kaskı",
+   "altTitles": [
+    "摩托车头盔",
+    "motorcycle helmet"
+   ],
+   "category": "motosiklet-kaski"
+  },
+  "candidates": [
+   {
+    "title": "3C认证摩托车头盔男女炫酷电动车机车头盔全盔大码防雾可拆卸安全",
+    "market": "cn-taobao",
+    "label": "variant",
+    "category": "motosiklet-kaski"
+   },
+   {
+    "title": "红杜MKAN摩托车头盔机车头盔挡泥板恋爱摩卡安自由认证3C",
+    "market": "cn-pinduoduo",
+    "label": "variant",
+    "category": "motosiklet-kaski"
+   },
+   {
+    "title": "头盔镜片 适用于LS2 FF353 通用防雾镜片",
+    "market": "cn-1688",
+    "label": "accessory"
+   },
+   {
+    "title": "3C认证电动车头盔男女揭面盔四季通用",
+    "market": "cn-taobao",
+    "label": "variant",
+    "category": "motosiklet-kaski"
+   },
+   {
+    "title": "意大利KASK UTOPIA Y乌托邦破风气动公路车骑行头盔自行车安全帽",
+    "market": "cn-taobao",
+    "label": "different",
+    "category": "bisiklet-kaski"
+   }
+  ],
+  "note": ""
+ },
+ {
+  "id": "helmet-agv",
+  "query": {
+   "title": "AGV K3 Kapalı Kask Mat Siyah",
+   "altTitles": [
+    "AGV K3 头盔",
+    "AGV K3 helmet"
+   ]
+  },
+  "candidates": [
+   {
+    "title": "K3 Syth Black Red Kapalı Kask",
+    "market": "tr-trendyol",
+    "label": "variant"
+   },
+   {
+    "title": "AGV K3 摩托车头盔 全盔 亚光黑",
+    "market": "cn-1688",
+    "label": "same"
+   },
+   {
+    "title": "AGV K1 S Kask Mat Siyah",
+    "market": "tr-trendyol",
+    "label": "different"
+   },
+   {
+    "title": "AGV K3 iç astar yedek parça",
+    "market": "tr-trendyol",
+    "label": "accessory"
+   }
+  ],
+  "note": ""
+ },
+ {
+  "id": "helmet-endro",
+  "query": {
+   "title": "ENDRO ThunderBolt Mat Siyah Kask"
+  },
+  "candidates": [
+   {
+    "title": "ENDRO ThunderBolt Mat Siyah Kask",
+    "market": "tr-trendyol",
+    "label": "same"
+   },
+   {
+    "title": "Endro Thunderbolt Kask Vizörü Şeffaf",
+    "market": "tr-trendyol",
+    "label": "accessory"
+   },
+   {
+    "title": "Dinamo Evo Parlak Siyah Kask",
+    "market": "tr-trendyol",
+    "label": "different"
+   }
+  ],
+  "note": ""
+ },
+ {
+  "id": "buds-redmi4pro",
+  "query": {
+   "title": "Xiaomi Redmi Buds 4 Pro Kablosuz Kulaklık Siyah",
+   "altTitles": [
+    "Xiaomi Redmi Buds 4 Pro 无线耳机",
+    "Xiaomi Redmi Buds 4 Pro wireless earbuds"
+   ]
+  },
+  "candidates": [
+   {
+    "title": "小米 Redmi Buds 4 Pro 无线蓝牙耳机 主动降噪",
+    "market": "cn-taobao",
+    "label": "same"
+   },
+   {
+    "title": "Redmi Buds 4 Pro Wireless Earbuds Black",
+    "market": "us-amazon",
+    "label": "same"
+   },
+   {
+    "title": "Redmi Buds 4 Pro kılıf silikon",
+    "market": "tr-trendyol",
+    "label": "accessory"
+   },
+   {
+    "title": "Xiaomi Redmi Buds 4 Lite Kablosuz Kulaklık",
+    "market": "tr-trendyol",
+    "label": "variant"
+   },
+   {
+    "title": "Xiaomi Redmi Buds 4 Pro 保护套 硅胶",
+    "market": "cn-1688",
+    "label": "accessory"
+   },
+   {
+    "title": "Soundcore by Anker P20i True Wireless Earbuds",
+    "market": "us-amazon",
+    "label": "different"
+   }
+  ],
+  "note": ""
+ },
+ {
+  "id": "buds-generic",
+  "query": {
+   "title": "kablosuz kulaklık",
+   "altTitles": [
+    "无线耳机",
+    "wireless earbuds"
+   ],
+   "category": "kablosuz-kulaklik"
+  },
+  "candidates": [
+   {
+    "title": "TWS无线蓝牙耳机 运动防水 跨境爆款",
+    "market": "cn-1688",
+    "label": "variant",
+    "category": "kablosuz-kulaklik"
+   },
+   {
+    "title": "JBL Tune 230NC TWS Kablosuz Kulaklık",
+    "market": "tr-trendyol",
+    "label": "variant",
+    "category": "kablosuz-kulaklik"
+   },
+   {
+    "title": "Kablosuz Kulaklık Şarj Kutusu Kılıf",
+    "market": "tr-trendyol",
+    "label": "accessory"
+   },
+   {
+    "title": "Kulaklık Askısı Masaüstü Stand",
+    "market": "tr-trendyol",
+    "label": "accessory"
+   },
+   {
+    "title": "Bluetooth Hoparlör Taşınabilir",
+    "market": "tr-trendyol",
+    "label": "different",
+    "category": "bluetooth-hoparlor"
+   }
+  ],
+  "note": ""
+ },
+ {
+  "id": "buds-airpods",
+  "query": {
+   "title": "Apple AirPods Pro 2. Nesil USB-C",
+   "phash": "d36c517a9f4ecf64"
+  },
+  "candidates": [
+   {
+    "title": "Apple AirPods Pro 2nd Gen USB-C MTJV3",
+    "market": "us-amazon",
+    "label": "same",
+    "phash": "d36c517a9f4ecf64"
+   },
+   {
+    "title": "AirPods Pro 2 kılıf şeffaf darbe korumalı",
+    "market": "tr-trendyol",
+    "label": "accessory",
+    "phash": "64c4f9ab2777f6f5"
+   },
+   {
+    "title": "Apple AirPods 4 ANC",
+    "market": "us-amazon",
+    "label": "variant",
+    "phash": "bf7cc755f6c646dd"
+   },
+   {
+    "title": "苹果 AirPods Pro 2 USB-C 无线耳机",
+    "market": "cn-taobao",
+    "label": "same",
+    "phash": "d36c517a9f4ecf64"
+   }
+  ],
+  "note": ""
+ },
+ {
+  "id": "pb-xiaomi",
+  "query": {
+   "title": "Xiaomi 33W Powerbank 20000mAh Siyah",
+   "altTitles": [
+    "Xiaomi 移动电源 20000mAh 33W",
+    "Xiaomi power bank 20000mAh 33W"
+   ]
+  },
+  "candidates": [
+   {
+    "title": "小米移动电源3 20000mAh 33W 快充",
+    "market": "cn-1688",
+    "label": "variant",
+    "note": "generation 3 of the same line"
+   },
+   {
+    "title": "Xiaomi 20000mAh 33W Power Bank Pocket Edition",
+    "market": "us-amazon",
+    "label": "same"
+   },
+   {
+    "title": "Anker PowerCore 20000mAh 30W",
+    "market": "us-amazon",
+    "label": "different"
+   },
+   {
+    "title": "Xiaomi 10000mAh 22.5W Powerbank",
+    "market": "tr-trendyol",
+    "label": "variant"
+   }
+  ],
+  "note": ""
+ },
+ {
+  "id": "charger-65w",
+  "query": {
+   "title": "Baseus GaN 65W Şarj Adaptörü",
+   "altTitles": [
+    "Baseus 充电器 65W",
+    "Baseus charger 65W"
+   ]
+  },
+  "candidates": [
+   {
+    "title": "倍思 Baseus GaN5 65W 氮化镓充电器",
+    "market": "cn-taobao",
+    "label": "same"
+   },
+   {
+    "title": "Baseus GaN 65W USB C Charger",
+    "market": "gb-amazon",
+    "label": "same"
+   },
+   {
+    "title": "Baseus 100W GaN Charger",
+    "market": "us-amazon",
+    "label": "variant"
+   },
+   {
+    "title": "Baseus 65W şarj cihazı için kablo 100W Type-C",
+    "market": "tr-trendyol",
+    "label": "accessory"
+   }
+  ],
+  "note": ""
+ },
+ {
+  "id": "airfryer-philips",
+  "query": {
+   "title": "Philips Airfryer HD9252/90 Essential 4.1L",
+   "altTitles": [
+    "Philips HD9252/90 空气炸锅",
+    "Philips HD9252/90 air fryer"
+   ]
+  },
+  "candidates": [
+   {
+    "title": "Philips HD9252/90 Airfryer Essential 4.1L",
+    "market": "tr-trendyol",
+    "label": "same"
+   },
+   {
+    "title": "Philips Essential Airfryer HD9252 4.1L",
+    "market": "de-amazon",
+    "label": "same"
+   },
+   {
+    "title": "Philips HD9252 Airfryer Filtre Yedek Parça",
+    "market": "tr-trendyol",
+    "label": "accessory"
+   },
+   {
+    "title": "Philips HD9270/90 Airfryer XL 6.2L",
+    "market": "tr-trendyol",
+    "label": "variant"
+   },
+   {
+    "title": "飞利浦空气炸锅 HD9252 家用 4.1L",
+    "market": "cn-taobao",
+    "label": "same"
+   },
+   {
+    "title": "Xiaomi Mi Smart Air Fryer 3.5L",
+    "market": "tr-trendyol",
+    "label": "different"
+   }
+  ],
+  "note": ""
+ },
+ {
+  "id": "airfryer-generic",
+  "query": {
+   "title": "airfryer 5 litre",
+   "altTitles": [
+    "空气炸锅 5L",
+    "air fryer 5L"
+   ],
+   "category": "airfryer"
+  },
+  "candidates": [
+   {
+    "title": "空气炸锅家用 5L 大容量 无油",
+    "market": "cn-1688",
+    "label": "variant",
+    "category": "airfryer"
+   },
+   {
+    "title": "Tefal Easy Fry 4.2L Airfryer",
+    "market": "tr-trendyol",
+    "label": "variant",
+    "category": "airfryer"
+   },
+   {
+    "title": "Airfryer Pişirme Kağıdı 100 Adet",
+    "market": "tr-trendyol",
+    "label": "accessory"
+   },
+   {
+    "title": "Airfryer için silikon sepet aparatı",
+    "market": "tr-trendyol",
+    "label": "accessory"
+   }
+  ],
+  "note": ""
+ },
+ {
+  "id": "thermos-stanley",
+  "query": {
+   "title": "Stanley Quencher 1.18L Termos Bardak",
+   "altTitles": [
+    "Stanley Quencher 保温杯 1.18L",
+    "Stanley Quencher thermos 1.18L"
+   ]
+  },
+  "candidates": [
+   {
+    "title": "Stanley Quencher H2.0 FlowState 40oz Tumbler",
+    "market": "us-amazon",
+    "label": "same"
+   },
+   {
+    "title": "史丹利 Stanley Quencher 1.18L 保温杯",
+    "market": "cn-taobao",
+    "label": "same"
+   },
+   {
+    "title": "Stanley Quencher 0.59L 20oz Tumbler",
+    "market": "us-amazon",
+    "label": "variant"
+   },
+   {
+    "title": "Stanley Quencher 40oz uyumlu pipet 3 adet",
+    "market": "tr-trendyol",
+    "label": "accessory"
+   },
+   {
+    "title": "Stanley Quencher 40oz Silicone Boot Protector",
+    "market": "us-ebay",
+    "label": "accessory"
+   }
+  ],
+  "note": ""
+ },
+ {
+  "id": "thermos-generic",
+  "query": {
+   "title": "paslanmaz çelik termos 500ml",
+   "altTitles": [
+    "保温杯 不锈钢 500ml",
+    "stainless steel thermos 500ml"
+   ],
+   "category": "termos"
+  },
+  "candidates": [
+   {
+    "title": "不锈钢保温杯500ml 商务便携",
+    "market": "cn-1688",
+    "label": "variant",
+    "category": "termos"
+   },
+   {
+    "title": "Paslanmaz Çelik Termos 500 ml Çelik",
+    "market": "tr-trendyol",
+    "label": "variant",
+    "category": "termos"
+   },
+   {
+    "title": "Paslanmaz Çelik Termos 1000ml",
+    "market": "tr-trendyol",
+    "label": "different",
+    "category": "termos"
+   },
+   {
+    "title": "Termos Kılıfı 500ml Neopren",
+    "market": "tr-trendyol",
+    "label": "accessory"
+   }
+  ],
+  "note": ""
+ },
+ {
+  "id": "case-s24",
+  "query": {
+   "title": "Samsung Galaxy S24 Ultra Kılıf Şeffaf",
+   "altTitles": [
+    "Samsung Galaxy S24 Ultra 保护壳",
+    "Samsung Galaxy S24 Ultra case"
+   ]
+  },
+  "candidates": [
+   {
+    "title": "Samsung Galaxy S24 Ultra Şeffaf Silikon Kılıf",
+    "market": "tr-trendyol",
+    "label": "same"
+   },
+   {
+    "title": "三星 Galaxy S24 Ultra 手机壳 透明",
+    "market": "cn-1688",
+    "label": "same"
+   },
+   {
+    "title": "Samsung Galaxy S24 Ultra 256GB Titanium Black",
+    "market": "tr-trendyol",
+    "label": "different"
+   },
+   {
+    "title": "Samsung Galaxy S24 Kılıf Şeffaf",
+    "market": "tr-trendyol",
+    "label": "variant"
+   },
+   {
+    "title": "Samsung Galaxy S24 Ultra Ekran Koruyucu",
+    "market": "tr-trendyol",
+    "label": "different"
+   }
+  ],
+  "note": ""
+ },
+ {
+  "id": "phone-iphone15",
+  "query": {
+   "title": "Apple iPhone 15 Pro Max 256GB Siyah Titanyum",
+   "phash": "0960ad0addce5337"
+  },
+  "candidates": [
+   {
+    "title": "Apple iPhone 15 Pro Max 256GB Black Titanium",
+    "market": "us-amazon",
+    "label": "same",
+    "phash": "0960ad0addce5337"
+   },
+   {
+    "title": "iPhone 15 Pro Max Kılıf Şeffaf MagSafe",
+    "market": "tr-trendyol",
+    "label": "accessory",
+    "phash": "edd67b80fff37530"
+   },
+   {
+    "title": "Apple iPhone 15 Pro 128GB",
+    "market": "tr-trendyol",
+    "label": "variant",
+    "phash": "8719635c98246b5b"
+   },
+   {
+    "title": "iPhone 15 Pro Max 256GB 国行 黑色钛金属",
+    "market": "cn-taobao",
+    "label": "same",
+    "phash": "0960ad0addce5337"
+   },
+   {
+    "title": "iPhone 15 Pro Max ekran koruyucu temperli cam",
+    "market": "tr-trendyol",
+    "label": "accessory",
+    "phash": "4ca36e9b5ae29cec"
+   }
+  ],
+  "note": ""
+ },
+ {
+  "id": "vacuum-dyson",
+  "query": {
+   "title": "Dyson V15 Detect Absolute Kablosuz Süpürge",
+   "altTitles": [
+    "Dyson V15 Detect 无线吸尘器",
+    "Dyson V15 Detect cordless vacuum"
+   ]
+  },
+  "candidates": [
+   {
+    "title": "Dyson V15 Detect Absolute Cordless Vacuum",
+    "market": "gb-amazon",
+    "label": "same"
+   },
+   {
+    "title": "戴森 Dyson V15 Detect 无线吸尘器",
+    "market": "cn-taobao",
+    "label": "same"
+   },
+   {
+    "title": "Dyson V12 Detect Slim Kablosuz Süpürge",
+    "market": "tr-trendyol",
+    "label": "variant"
+   },
+   {
+    "title": "Dyson V15 Detect Filtre Yedek Parça",
+    "market": "tr-trendyol",
+    "label": "accessory"
+   },
+   {
+    "title": "Dyson V15 uyumlu duvar askı aparatı",
+    "market": "tr-trendyol",
+    "label": "accessory"
+   }
+  ],
+  "note": ""
+ },
+ {
+  "id": "watch-gt4",
+  "query": {
+   "title": "Huawei Watch GT 4 46mm Siyah",
+   "altTitles": [
+    "Huawei Watch GT 4 智能手表 46mm",
+    "Huawei Watch GT 4 smart watch 46mm"
+   ]
+  },
+  "candidates": [
+   {
+    "title": "华为 Watch GT4 46mm 智能手表 黑色",
+    "market": "cn-taobao",
+    "label": "same"
+   },
+   {
+    "title": "Huawei Watch GT 4 46mm Black",
+    "market": "de-amazon",
+    "label": "same"
+   },
+   {
+    "title": "Huawei Watch GT 4 41mm",
+    "market": "tr-trendyol",
+    "label": "variant"
+   },
+   {
+    "title": "Huawei Watch GT 4 46mm Kordon Silikon",
+    "market": "tr-trendyol",
+    "label": "accessory"
+   },
+   {
+    "title": "Huawei Watch GT 4 ekran koruyucu 46mm",
+    "market": "tr-trendyol",
+    "label": "accessory"
+   }
+  ],
+  "note": ""
+ },
+ {
+  "id": "shoes-nike270",
+  "query": {
+   "title": "Nike Air Max 270 Erkek Spor Ayakkabı Siyah",
+   "altTitles": [
+    "Nike Air Max 270 运动鞋 男",
+    "Nike Air Max 270 sneakers men's"
+   ]
+  },
+  "candidates": [
+   {
+    "title": "Nike Air Max 270 Men's Shoes Black",
+    "market": "us-amazon",
+    "label": "same"
+   },
+   {
+    "title": "Nike Air Max 270 React Erkek Spor Ayakkabı",
+    "market": "tr-trendyol",
+    "label": "variant"
+   },
+   {
+    "title": "Nike Air Max 90 Erkek Spor Ayakkabı",
+    "market": "tr-trendyol",
+    "label": "different"
+   },
+   {
+    "title": "耐克 Nike Air Max 270 男子运动鞋 黑色",
+    "market": "cn-taobao",
+    "label": "same"
+   },
+   {
+    "title": "Nike Air Max 270 ayakkabı bağcığı",
+    "market": "tr-trendyol",
+    "label": "accessory"
+   }
+  ],
+  "note": ""
+ },
+ {
+  "id": "shoes-generic",
+  "query": {
+   "title": "erkek spor ayakkabı",
+   "altTitles": [
+    "运动鞋 男",
+    "men's sneakers"
+   ],
+   "category": "spor-ayakkabi"
+  },
+  "candidates": [
+   {
+    "title": "运动鞋男 2024 新款 跑步鞋 透气",
+    "market": "cn-1688",
+    "label": "variant",
+    "category": "spor-ayakkabi"
+   },
+   {
+    "title": "Erkek Spor Ayakkabı Sneaker Günlük",
+    "market": "tr-trendyol",
+    "label": "variant",
+    "category": "spor-ayakkabi"
+   },
+   {
+    "title": "Ayakkabı Tabanlığı Ortopedik",
+    "market": "tr-trendyol",
+    "label": "different",
+    "category": "ayakkabi-tabanligi"
+   }
+  ],
+  "note": ""
+ },
+ {
+  "id": "dress-generic",
+  "query": {
+   "title": "kadın yazlık elbise",
+   "altTitles": [
+    "连衣裙 女 夏季",
+    "women's summer dress"
+   ],
+   "category": "elbise"
+  },
+  "candidates": [
+   {
+    "title": "连衣裙女 夏季 新款 碎花",
+    "market": "cn-1688",
+    "label": "variant",
+    "category": "elbise"
+   },
+   {
+    "title": "Kadın Yazlık Çiçekli Elbise",
+    "market": "tr-trendyol",
+    "label": "variant",
+    "category": "elbise"
+   },
+   {
+    "title": "Kadın Yazlık Bluz",
+    "market": "tr-trendyol",
+    "label": "different",
+    "category": "bluz"
+   }
+  ],
+  "note": ""
+ },
+ {
+  "id": "tshirt-generic",
+  "query": {
+   "title": "erkek basic tişört pamuklu",
+   "altTitles": [
+    "男T恤 纯棉",
+    "men's cotton t-shirt"
+   ],
+   "category": "erkek-t-shirt"
+  },
+  "candidates": [
+   {
+    "title": "男T恤 纯棉 基础款 短袖",
+    "market": "cn-1688",
+    "label": "variant",
+    "category": "erkek-t-shirt"
+   },
+   {
+    "title": "Erkek Basic Pamuklu Tişört",
+    "market": "tr-trendyol",
+    "label": "variant",
+    "category": "erkek-t-shirt"
+   },
+   {
+    "title": "Erkek Polo Yaka Tişört",
+    "market": "tr-trendyol",
+    "label": "variant",
+    "category": "polo-yaka"
+   }
+  ],
+  "note": ""
+ },
+ {
+  "id": "sunglasses-rb",
+  "query": {
+   "title": "Ray-Ban Aviator RB3025 Güneş Gözlüğü",
+   "altTitles": [
+    "Ray-Ban RB3025 太阳镜",
+    "Ray-Ban RB3025 sunglasses"
+   ]
+  },
+  "candidates": [
+   {
+    "title": "Ray-Ban RB3025 Aviator Classic Sunglasses",
+    "market": "us-amazon",
+    "label": "same"
+   },
+   {
+    "title": "雷朋 Ray-Ban RB3025 飞行员太阳镜",
+    "market": "cn-taobao",
+    "label": "same"
+   },
+   {
+    "title": "Ray-Ban RB3025 Yedek Cam Lens",
+    "market": "us-ebay",
+    "label": "accessory"
+   },
+   {
+    "title": "Ray-Ban Wayfarer RB2140 Güneş Gözlüğü",
+    "market": "tr-trendyol",
+    "label": "different"
+   }
+  ],
+  "note": ""
+ },
+ {
+  "id": "lego-42151",
+  "query": {
+   "title": "LEGO Technic 42151 Bugatti Bolide",
+   "phash": "971717fa7afc4327"
+  },
+  "candidates": [
+   {
+    "title": "LEGO Technic Bugatti Bolide 42151 Building Set",
+    "market": "us-amazon",
+    "label": "same",
+    "phash": "971717fa7afc4327"
+   },
+   {
+    "title": "乐高 LEGO 42151 布加迪 Bolide 积木",
+    "market": "cn-taobao",
+    "label": "same",
+    "phash": "971717fa7afc4327"
+   },
+   {
+    "title": "LEGO Technic 42154 Ford GT",
+    "market": "us-amazon",
+    "label": "different",
+    "phash": "ee0c4bc26067f899"
+   },
+   {
+    "title": "LEGO 42151 için akrilik vitrin kutusu",
+    "market": "tr-trendyol",
+    "label": "accessory",
+    "phash": "7068a50917c96581"
+   }
+  ],
+  "note": ""
+ },
+ {
+  "id": "stroller-generic",
+  "query": {
+   "title": "bebek arabası katlanır",
+   "altTitles": [
+    "婴儿车 折叠",
+    "folding stroller"
+   ],
+   "category": "bebek-arabasi"
+  },
+  "candidates": [
+   {
+    "title": "婴儿车 折叠 轻便 可坐可躺",
+    "market": "cn-1688",
+    "label": "variant",
+    "category": "bebek-arabasi"
+   },
+   {
+    "title": "Katlanır Baston Bebek Arabası",
+    "market": "tr-trendyol",
+    "label": "variant",
+    "category": "bebek-arabasi"
+   },
+   {
+    "title": "Bebek Arabası Yağmurluğu Şeffaf",
+    "market": "tr-trendyol",
+    "label": "accessory"
+   },
+   {
+    "title": "Bebek Arabası Askı Kancası 2 Adet",
+    "market": "tr-trendyol",
+    "label": "accessory"
+   }
+  ],
+  "note": ""
+ },
+ {
+  "id": "drill-bosch",
+  "query": {
+   "title": "Bosch GSB 120-LI Şarjlı Matkap 12V",
+   "altTitles": [
+    "Bosch GSB 120-LI 电钻 12V",
+    "Bosch GSB 120-LI drill 12V"
+   ]
+  },
+  "candidates": [
+   {
+    "title": "Bosch GSB 120-LI Cordless Combi Drill 12V",
+    "market": "gb-amazon",
+    "label": "same"
+   },
+   {
+    "title": "博世 Bosch GSB 120-LI 充电式电钻 12V",
+    "market": "cn-taobao",
+    "label": "same"
+   },
+   {
+    "title": "Bosch GSR 120-LI Şarjlı Vidalama 12V",
+    "market": "tr-trendyol",
+    "label": "variant"
+   },
+   {
+    "title": "Bosch 12V Yedek Batarya 2.0Ah GBA",
+    "market": "tr-trendyol",
+    "label": "accessory"
+   },
+   {
+    "title": "Matkap Ucu Seti 50 Parça",
+    "market": "tr-trendyol",
+    "label": "accessory"
+   }
+  ],
+  "note": ""
+ },
+ {
+  "id": "catfood-generic",
+  "query": {
+   "title": "kedi maması 10 kg",
+   "altTitles": [
+    "猫粮 10kg",
+    "cat food 10kg"
+   ],
+   "category": "kedi-mamasi"
+  },
+  "candidates": [
+   {
+    "title": "猫粮 10kg 全价成猫粮",
+    "market": "cn-1688",
+    "label": "variant",
+    "category": "kedi-mamasi"
+   },
+   {
+    "title": "Yetişkin Kedi Maması 10 kg Tavuklu",
+    "market": "tr-trendyol",
+    "label": "variant",
+    "category": "kedi-mamasi"
+   },
+   {
+    "title": "Kedi Kumu 10 kg Topaklanan",
+    "market": "tr-trendyol",
+    "label": "different",
+    "category": "kedi-kumu"
+   },
+   {
+    "title": "Kedi Mama Kabı Paslanmaz",
+    "market": "tr-trendyol",
+    "label": "different",
+    "category": "mama-kabi"
+   }
+  ],
+  "note": ""
+ },
+ {
+  "id": "yogamat-generic",
+  "query": {
+   "title": "yoga matı 10mm",
+   "altTitles": [
+    "瑜伽垫 10mm",
+    "yoga mat 10mm"
+   ],
+   "category": "yoga-mati"
+  },
+  "candidates": [
+   {
+    "title": "瑜伽垫 10mm 加厚 防滑 NBR",
+    "market": "cn-1688",
+    "label": "variant",
+    "category": "yoga-mati"
+   },
+   {
+    "title": "Yoga Matı 10mm Kaymaz Pilates Minderi",
+    "market": "tr-trendyol",
+    "label": "variant",
+    "category": "yoga-mati"
+   },
+   {
+    "title": "Yoga Matı Taşıma Askısı",
+    "market": "tr-trendyol",
+    "label": "accessory"
+   },
+   {
+    "title": "Yoga Matı 4mm İnce",
+    "market": "tr-trendyol",
+    "label": "different",
+    "category": "yoga-mati"
+   }
+  ],
+  "note": ""
+ },
+ {
+  "id": "speaker-jbl",
+  "query": {
+   "title": "JBL Flip 6 Bluetooth Hoparlör Siyah",
+   "phash": "08de4552d95b0dc1"
+  },
+  "candidates": [
+   {
+    "title": "JBL Flip 6 Portable Bluetooth Speaker Black",
+    "market": "us-amazon",
+    "label": "same",
+    "phash": "08de4552d95b0dc1"
+   },
+   {
+    "title": "JBL Flip 6 蓝牙音箱 黑色",
+    "market": "cn-taobao",
+    "label": "same",
+    "phash": "08de4552d95b0dc1"
+   },
+   {
+    "title": "JBL Flip 5 Bluetooth Hoparlör",
+    "market": "tr-trendyol",
+    "label": "variant",
+    "phash": "4e55f8427a8b27bc"
+   },
+   {
+    "title": "JBL Flip 6 Kılıf Taşıma Çantası",
+    "market": "tr-trendyol",
+    "label": "accessory",
+    "phash": "990c38ec62262447"
+   }
+  ],
+  "note": ""
+ },
+ {
+  "id": "keyboard-k2",
+  "query": {
+   "title": "Keychron K2 V2 Mekanik Klavye Kablosuz",
+   "altTitles": [
+    "Keychron K2 V2 机械键盘 无线",
+    "Keychron K2 V2 mechanical keyboard wireless"
+   ]
+  },
+  "candidates": [
+   {
+    "title": "Keychron K2 Version 2 Wireless Mechanical Keyboard",
+    "market": "us-amazon",
+    "label": "same"
+   },
+   {
+    "title": "Keychron K2 V2 无线机械键盘",
+    "market": "cn-taobao",
+    "label": "same"
+   },
+   {
+    "title": "Keychron K6 Mekanik Klavye",
+    "market": "tr-trendyol",
+    "label": "variant"
+   },
+   {
+    "title": "Keychron K2 Keycap Set PBT",
+    "market": "us-amazon",
+    "label": "accessory"
+   }
+  ],
+  "note": ""
+ },
+ {
+  "id": "backpack-generic",
+  "query": {
+   "title": "laptop sırt çantası 15.6 inç",
+   "altTitles": [
+    "双肩包 电脑包 15.6",
+    "laptop backpack 15.6"
+   ],
+   "category": "sirt-cantasi"
+  },
+  "candidates": [
+   {
+    "title": "双肩包 电脑包 15.6寸 商务 防水",
+    "market": "cn-1688",
+    "label": "variant",
+    "category": "sirt-cantasi"
+   },
+   {
+    "title": "15.6 inç Laptop Bölmeli Sırt Çantası",
+    "market": "tr-trendyol",
+    "label": "variant",
+    "category": "sirt-cantasi"
+   },
+   {
+    "title": "Laptop Kılıfı 15.6 inç Neopren",
+    "market": "tr-trendyol",
+    "label": "different",
+    "category": "laptop-cantasi"
+   }
+  ],
+  "note": ""
+ },
+ {
+  "id": "dyson-airwrap",
+  "query": {
+   "title": "Dyson Airwrap Complete Long Saç Şekillendirici",
+   "altTitles": [
+    "Dyson Airwrap Complete Long 卷发棒",
+    "Dyson Airwrap Complete Long hair styler"
+   ]
+  },
+  "candidates": [
+   {
+    "title": "Dyson Airwrap Complete Long Multi-Styler",
+    "market": "gb-amazon",
+    "label": "same"
+   },
+   {
+    "title": "戴森 Dyson Airwrap Complete Long 卷发棒",
+    "market": "cn-taobao",
+    "label": "same"
+   },
+   {
+    "title": "Dyson Airwrap Yedek Fırça Başlığı",
+    "market": "tr-trendyol",
+    "label": "accessory"
+   },
+   {
+    "title": "Dyson Supersonic Saç Kurutma Makinesi",
+    "market": "tr-trendyol",
+    "label": "different"
+   }
+  ],
+  "note": ""
+ },
+ {
+  "id": "dashcam-70mai",
+  "query": {
+   "title": "70mai A800S 4K Araç Kamerası",
+   "altTitles": [
+    "70mai A800S 行车记录仪 4K",
+    "70mai A800S dash cam 4K"
+   ]
+  },
+  "candidates": [
+   {
+    "title": "70mai A800S 4K Dash Cam",
+    "market": "us-amazon",
+    "label": "same"
+   },
+   {
+    "title": "70迈 A800S 4K 行车记录仪",
+    "market": "cn-taobao",
+    "label": "same"
+   },
+   {
+    "title": "70mai A500S 2.7K Araç Kamerası",
+    "market": "tr-trendyol",
+    "label": "variant"
+   },
+   {
+    "title": "70mai A800S için arka kamera RC06",
+    "market": "tr-trendyol",
+    "label": "accessory"
+   }
+  ],
+  "note": ""
+ },
+ {
+  "id": "img-only-helmet",
+  "query": {
+   "title": "LS2 Rapid 2",
+   "phash": "321a3efb48f4f9eb"
+  },
+  "candidates": [
+   {
+    "title": "LS2 FF353 Rapid II 全盔 黑色",
+    "market": "cn-1688",
+    "label": "same",
+    "phash": "321a3efb48f4f9eb"
+   },
+   {
+    "title": "头盔 通用 蓝牙耳机 支架",
+    "market": "cn-1688",
+    "label": "accessory",
+    "phash": "321a3efb48f4f9eb"
+   },
+   {
+    "title": "3C认证电动车头盔女士电瓶车冬季安全帽四季通用摩托车半盔男三c",
+    "market": "cn-taobao",
+    "label": "different",
+    "phash": "9657363a3f4fb6e4"
+   }
+  ],
+  "note": "Image-search style: identical phash with a cross-language title."
+ },
+ {
+  "id": "img-contradict",
+  "query": {
+   "title": "Philips HD9252 Airfryer",
+   "phash": "1e63aaab26415124"
+  },
+  "candidates": [
+   {
+    "title": "Philips HD9252 Airfryer Essential",
+    "market": "tr-trendyol",
+    "label": "same",
+    "phash": "1e63aaab26415124"
+   },
+   {
+    "title": "Philips HD9252 Airfryer",
+    "market": "cn-1688",
+    "label": "variant",
+    "phash": "b20db9b789531149",
+    "note": "Shared code but completely different image: variant listing reusing the code."
+   }
+  ],
+  "note": ""
+ },
+ {
+  "id": "lamp-generic",
+  "query": {
+   "title": "masa lambası led şarjlı",
+   "altTitles": [
+    "台灯 LED 充电式",
+    "led desk lamp rechargeable"
+   ],
+   "category": "masa-lambasi"
+  },
+  "candidates": [
+   {
+    "title": "台灯 LED 充电式 护眼 学生",
+    "market": "cn-1688",
+    "label": "variant",
+    "category": "masa-lambasi"
+   },
+   {
+    "title": "Şarjlı LED Masa Lambası Dokunmatik",
+    "market": "tr-trendyol",
+    "label": "variant",
+    "category": "masa-lambasi"
+   },
+   {
+    "title": "LED Ampul 9W E27",
+    "market": "tr-trendyol",
+    "label": "different",
+    "category": "ampul"
+   }
+  ],
+  "note": ""
+ },
+ {
+  "id": "router-generic",
+  "query": {
+   "title": "wifi router mesh",
+   "altTitles": [
+    "路由器 mesh",
+    "wifi router mesh"
+   ],
+   "category": "wi-fi-router"
+  },
+  "candidates": [
+   {
+    "title": "路由器 WiFi6 mesh 千兆 家用",
+    "market": "cn-1688",
+    "label": "variant",
+    "category": "wi-fi-router"
+   },
+   {
+    "title": "TP-Link Deco M4 Mesh WiFi Router",
+    "market": "tr-trendyol",
+    "label": "variant",
+    "category": "wi-fi-router"
+   },
+   {
+    "title": "Ağ Kablosu Cat6 10m",
+    "market": "tr-trendyol",
+    "label": "different",
+    "category": "ag-kablosu"
+   }
+  ],
+  "note": ""
+ },
+ {
+  "id": "tent-generic",
+  "query": {
+   "title": "4 kişilik kamp çadırı",
+   "altTitles": [
+    "帐篷 4人",
+    "camping tent 4 person"
+   ],
+   "category": "kamp-cadiri"
+  },
+  "candidates": [
+   {
+    "title": "帐篷 户外 4人 露营 防雨",
+    "market": "cn-1688",
+    "label": "variant",
+    "category": "kamp-cadiri"
+   },
+   {
+    "title": "4 Kişilik Otomatik Kamp Çadırı",
+    "market": "tr-trendyol",
+    "label": "variant",
+    "category": "kamp-cadiri"
+   },
+   {
+    "title": "Çadır Kazığı 10 Adet Alüminyum",
+    "market": "tr-trendyol",
+    "label": "accessory"
+   }
+  ],
+  "note": ""
+ },
+ {
+  "id": "gopro",
+  "query": {
+   "title": "GoPro HERO12 Black Aksiyon Kamerası",
+   "phash": "605fe375658e3790"
+  },
+  "candidates": [
+   {
+    "title": "GoPro HERO12 Black Action Camera",
+    "market": "us-amazon",
+    "label": "same",
+    "phash": "605fe375658e3790"
+   },
+   {
+    "title": "GoPro HERO12 Black 运动相机",
+    "market": "cn-taobao",
+    "label": "same",
+    "phash": "605fe375658e3790"
+   },
+   {
+    "title": "GoPro HERO11 Black",
+    "market": "us-amazon",
+    "label": "variant",
+    "phash": "4436ce0f8c064ab1"
+   },
+   {
+    "title": "GoPro HERO12 için pil 2 adet şarj aleti",
+    "market": "tr-trendyol",
+    "label": "accessory",
+    "phash": "4cc81c14b3d02e82"
+   },
+   {
+    "title": "GoPro HERO12 Black Kılıf Koruyucu",
+    "market": "tr-trendyol",
+    "label": "accessory",
+    "phash": "9e7c2caa900f9198"
+   }
+  ],
+  "note": ""
+ },
+ {
+  "id": "kettle-generic",
+  "query": {
+   "title": "elektrikli kettle 1.7 litre paslanmaz",
+   "altTitles": [
+    "电热水壶 不锈钢 1.7L",
+    "electric kettle stainless 1.7L"
+   ],
+   "category": "elektrikli-kettle"
+  },
+  "candidates": [
+   {
+    "title": "电热水壶 1.7L 不锈钢 家用",
+    "market": "cn-1688",
+    "label": "variant",
+    "category": "elektrikli-kettle"
+   },
+   {
+    "title": "Paslanmaz Çelik Elektrikli Kettle 1.7L",
+    "market": "tr-trendyol",
+    "label": "variant",
+    "category": "elektrikli-kettle"
+   },
+   {
+    "title": "Elektrikli Kettle 0.8L Seyahat",
+    "market": "tr-trendyol",
+    "label": "different",
+    "category": "elektrikli-kettle"
+   }
+  ],
+  "note": ""
+ },
+ {
+  "id": "mouse-logi",
+  "query": {
+   "title": "Logitech MX Master 3S Kablosuz Mouse",
+   "altTitles": [
+    "Logitech MX Master 3S 无线鼠标",
+    "Logitech MX Master 3S wireless mouse"
+   ]
+  },
+  "candidates": [
+   {
+    "title": "Logitech MX Master 3S Wireless Mouse",
+    "market": "us-amazon",
+    "label": "same"
+   },
+   {
+    "title": "罗技 Logitech MX Master 3S 无线鼠标",
+    "market": "cn-taobao",
+    "label": "same"
+   },
+   {
+    "title": "Logitech MX Master 3 Kablosuz Mouse",
+    "market": "tr-trendyol",
+    "label": "variant"
+   },
+   {
+    "title": "Logitech MX Master 3S Mouse Pad",
+    "market": "tr-trendyol",
+    "label": "accessory"
+   }
+  ],
+  "note": ""
+ },
+ {
+  "id": "massage-gun",
+  "query": {
+   "title": "masaj tabancası 30 kademeli",
+   "altTitles": [
+    "筋膜枪",
+    "massage gun"
+   ],
+   "category": "masaj-tabancasi"
+  },
+  "candidates": [
+   {
+    "title": "筋膜枪 30档 肌肉放松 便携",
+    "market": "cn-1688",
+    "label": "variant",
+    "category": "masaj-tabancasi"
+   },
+   {
+    "title": "Masaj Tabancası 30 Kademeli 6 Başlıklı",
+    "market": "tr-trendyol",
+    "label": "variant",
+    "category": "masaj-tabancasi"
+   },
+   {
+    "title": "Masaj Tabancası Yedek Başlık 4 Adet",
+    "market": "tr-trendyol",
+    "label": "accessory"
+   }
+  ],
+  "note": ""
+ },
+ {
+  "id": "perfume-generic",
+  "query": {
+   "title": "erkek parfüm 100 ml",
+   "altTitles": [
+    "香水 男 100ml",
+    "men's perfume 100ml"
+   ],
+   "category": "parfum"
+  },
+  "candidates": [
+   {
+    "title": "男士香水 100ml 持久淡香",
+    "market": "cn-1688",
+    "label": "variant",
+    "category": "parfum"
+   },
+   {
+    "title": "Erkek Parfüm 100 ml EDP",
+    "market": "tr-trendyol",
+    "label": "variant",
+    "category": "parfum"
+   },
+   {
+    "title": "Erkek Parfüm 50 ml EDT",
+    "market": "tr-trendyol",
+    "label": "different",
+    "category": "parfum"
+   }
+  ],
+  "note": ""
+ }
+]

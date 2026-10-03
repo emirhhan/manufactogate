@@ -7,5 +7,5 @@ export default defineConfig({
   plugins: [react(), tailwindcss()],
   resolve: { alias: { "@": fileURLToPath(new URL("./src", import.meta.url)) } },
   server: { port: 5173 },
-  test: { globals: true, name: "web", environment: "node" },
+  test: { globals: true, name: "web", environment: "happy-dom", setupFiles: ["./test/setup.ts"] },
 });

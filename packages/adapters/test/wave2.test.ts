@@ -21,6 +21,8 @@ describe("wave-2 beta markets", () => {
     document.body.innerHTML = `<div><a href="/urun/kask-p-HBC00001ABCD"><h3>Kask</h3></a><span>1.299,90 TL</span><span>(345)</span></div>`;
     const h = PAGE_EXTRACTORS["tr-hepsiburada"]!.search!(document) as SearchItem[];
     expect(h[0]!.price).toBe(1299.9);
-    expect(h[0]!.sold).toBe(345);
+    // "(345)" is the review count, not a sales count.
+    expect(h[0]!.sold).toBeNull();
+    expect(h[0]!.ratingCount).toBe(345);
   });
 });

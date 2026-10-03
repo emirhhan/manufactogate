@@ -99,9 +99,12 @@ export function leafOf(key: string): Leaf | undefined {
   return leafMap.get(key);
 }
 
-/** Inline SVG placeholder used when the remote image cannot load. */
+/**
+ * Inline SVG placeholder used when the remote image cannot load. Uses `currentColor`-free
+ * neutral greys that read as "empty" in both themes (a mid grey on a translucent tile).
+ */
 export function placeholder(label: string): string {
-  const safe = label.replace(/[<>&"]/g, "");
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="480" height="480"><rect width="100%" height="100%" fill="#e9e7e2"/><text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle" font-family="Inter,system-ui" font-size="22" fill="#8a8a88">${safe}</text></svg>`;
+  const safe = label.replace(/[<>&"]/g, "").slice(0, 28);
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="480" height="480" viewBox="0 0 480 480"><rect width="100%" height="100%" fill="#8a8a88" fill-opacity="0.12"/><rect x="150" y="150" width="180" height="180" rx="16" fill="none" stroke="#8a8a88" stroke-opacity="0.45" stroke-width="6"/><circle cx="205" cy="205" r="16" fill="#8a8a88" fill-opacity="0.45"/><path d="M165 300l55-60 40 45 30-30 40 45z" fill="#8a8a88" fill-opacity="0.45"/><text x="50%" y="392" dominant-baseline="middle" text-anchor="middle" font-family="Inter,system-ui,sans-serif" font-size="22" fill="#8a8a88">${safe}</text></svg>`;
   return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
 }

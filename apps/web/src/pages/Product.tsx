@@ -1,22 +1,31 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { BADGE_LABELS_TR, getProduct, listingFor } from "@manufactogate/adapters";
-import { computeLandedCost, computeMargin, normalizeBadges, type MarketId } from "@manufactogate/core";
-import { getCountryProfile } from "@manufactogate/country-profiles";
+import { computeMargin, normalizeBadges, type MarketId } from "@manufactogate/core";
+import { COUNTRY_NAMES_TR, getCountryProfile } from "@manufactogate/country-profiles";
+import { PriceChain } from "@/components/PriceChain";
 import { Badge, Button, Card, Empty } from "@/components/ui";
+import { buildChain, hsSuggest, marketplaceFor, pickQty, scenario } from "@/lib/analysis";
 import { groupOf, leafOf, placeholder, SOURCE_MARKETS, TARGET_MARKET } from "@/lib/catalog";
-import { money, pct } from "@/lib/format";
+import { money, pct, soldText } from "@/lib/format";
+import { minOf } from "@/lib/fx";
+import { imageToDataUrl } from "@/lib/images";
 import { getMockRegistry as getRegistry } from "@/lib/registry";
+import { useFxOverrides } from "@/lib/useFx";
 import { useSearch } from "@/store/search";
 import { useSettings } from "@/store/settings";
 
-const FX_CNY_TRY = 4.7;
-
+/** Mock catalog product page: price chain across markets, 1688 ladder, landed cost and margin from Settings. */
 export function Product() {
   const { id } = useParams();
   const nav = useNavigate();
   const start = useSearch((s) => s.start);
+  const running = useSearch((s) => s.running);
   const enabled = useSettings((s) => s.enabledMarkets);
+  const cost = useSettings((s) => s.cost);
+  const targetCountry = useSettings((s) => s.targetCountry);
+  useFxOverrides();
+  const [preparing, setPreparing] = useState(false);
   const product = id ? getProduct(id) : undefined;
   const reg = getRegistry();
 
@@ -35,18 +44,27 @@ export function Product() {
     );
   }
   const leaf = leafOf(product.category);
-  const source = rows.find((r) => r.market === "cn-1688")!.listing;
+  const source = rows.find((r) => r.market === "cn-1688")?.listing ?? rows.find((r) => r.market !== TARGET_MARKET)?.listing;
   const target = rows.find((r) => r.market === TARGET_MARKET)?.listing;
-  const profile = getCountryProfile("tr")!;
-  const qty = source.price.tiers[1]?.minQty ?? source.moq ?? 100;
-  const cost = computeLandedCost(profile, {
-    quantity: qty,
-    tiers: source.price.tiers,
-    fxRate: FX_CNY_TRY,
-    unitWeightKg: product.weightKg,
-    shippingKey: "air",
-  });
-  const margin = target ? computeMargin(profile, cost.perUnit, { sellPrice: target.price.tiers[0]!.unitPrice, marketplaceId: "tr-trendyol", overheadRate: 0.08 }) : null;
+  const profile = getCountryProfile(targetCountry) ?? getCountryProfile("tr")!;
+  const countryName = COUNTRY_NAMES_TR[profile.country] ?? profile.country.toUpperCase();
+  const hs = hsSuggest(leaf?.group);
+  const sc = source ? scenario(profile, source, { qty: pickQty(source.price.tiers, source.moq), shippingKey: cost.shippingKey, weightKg: product.weightKg || cost.defaultWeightKg, cnyTry: cost.fxCnyTry, ...(hs ? { hsCode: hs.hs } : {}) }) : null;
+  const sellPrice = target ? minOf(target) : null;
+  const marketplaceId = marketplaceFor(profile, target?.market);
+  const margin = sc && sellPrice ? computeMargin(profile, sc.cost.perUnit, { sellPrice, marketplaceId, overheadRate: cost.overheadRate }) : null;
+  const chain = sc && source ? buildChain({ sourceLabel: `${reg.get(source.market)?.meta.name ?? source.market} birim (${sc.qty} adet)`, sourceUnit: sc.cost.tierUsed.unitPrice, sourceCurrency: source.price.currency, landedPerUnit: sc.cost.perUnit, sell: sellPrice && target ? { label: `${reg.get(target.market)?.meta.name ?? target.market} satış`, price: sellPrice } : null, net: margin?.netPerUnit ?? null, currency: profile.currency, cnyTry: cost.fxCnyTry }) : [];
+
+  const searchAll = async () => {
+    setPreparing(true);
+    try {
+      const dataUrl = (await imageToDataUrl(product.image)) ?? product.image;
+      const sid = await start({ kind: "image", image: { dataUrl, sourceUrl: product.image }, title: product.titles.tr }, enabled, dataUrl);
+      nav(`/search/${sid}`);
+    } finally {
+      setPreparing(false);
+    }
+  };
 
   return (
     <div className="mx-auto max-w-[1440px] px-4 py-6">
@@ -78,15 +96,8 @@ export function Product() {
               }}
             />
           </div>
-          <Button
-            variant="primary"
-            className="mt-3 w-full justify-center"
-            onClick={async () => {
-              const sid = await start({ kind: "image", image: { dataUrl: product.image }, title: product.titles.tr }, enabled, product.image);
-              nav(`/search/${sid}`);
-            }}
-          >
-            Bu ürünü tüm pazarlarda ara
+          <Button variant="primary" className="mt-3 w-full justify-center" onClick={() => void searchAll()} disabled={preparing || running}>
+            {preparing ? "Görsel hazırlanıyor…" : running ? "Başka bir arama sürüyor…" : "Bu ürünü tüm pazarlarda ara"}
           </Button>
         </div>
 
@@ -97,17 +108,25 @@ export function Product() {
             <span>Model {product.model}</span>
             <span>· {product.weightKg} kg</span>
             <span>· {leaf?.tr}</span>
+            {hs && <span title={hs.label}>· GTİP {hs.hs}</span>}
           </div>
 
-          <Card className="mt-5 overflow-hidden">
-            <div className="border-b border-border px-4 py-2 text-[12px] font-medium uppercase tracking-wide text-muted">Fiyat zinciri</div>
+          {chain.length > 1 && (
+            <Card className="mt-4 p-4">
+              <div className="text-[11px] font-medium uppercase tracking-wide text-muted">Fiyat zinciri · {countryName}</div>
+              <PriceChain steps={chain} className="mt-3" />
+            </Card>
+          )}
+
+          <Card className="mt-4 overflow-hidden">
+            <div className="border-b border-border px-4 py-2 text-[12px] font-medium uppercase tracking-wide text-muted">Pazar başına fiyat</div>
             <table className="w-full text-[13px]">
               <thead className="text-left text-[11px] uppercase tracking-wide text-muted">
                 <tr>
                   <th className="px-4 py-2 font-medium">Pazar</th>
                   <th className="py-2 font-medium">Birim fiyat</th>
                   <th className="py-2 font-medium">MOQ</th>
-                  <th className="py-2 font-medium">Satış</th>
+                  <th className="py-2 font-medium">Sayaç</th>
                   <th className="py-2 font-medium">Satıcı</th>
                   <th className="py-2 pr-4 text-right font-medium"></th>
                 </tr>
@@ -123,7 +142,7 @@ export function Product() {
                       <td className="px-4 py-2 font-medium">{a?.meta.name ?? market}</td>
                       <td className="py-2 tnum">{min === max ? money(min, listing.price.currency) : `${money(min, listing.price.currency)} – ${money(max, listing.price.currency)}`}</td>
                       <td className="py-2 tnum">{listing.moq}</td>
-                      <td className="py-2 tnum">{listing.sold?.toLocaleString("tr-TR")}</td>
+                      <td className="py-2 tnum">{soldText(listing)}</td>
                       <td className="py-2">
                         <div>{listing.supplierName}</div>
                         <div className="flex flex-wrap gap-1">
@@ -135,6 +154,7 @@ export function Product() {
                         </div>
                       </td>
                       <td className="py-2 pr-4 text-right">
+                        <Link to={`/l/${market}/${listing.id}`} className="mr-2 text-accent hover:underline">İncele</Link>
                         <a href={listing.url} target="_blank" rel="noreferrer noopener" className="text-accent hover:underline">Aç ↗</a>
                       </td>
                     </tr>
@@ -144,43 +164,54 @@ export function Product() {
             </table>
           </Card>
 
-          <div className="mt-4 grid gap-4 md:grid-cols-2">
-            <Card className="p-4">
-              <div className="text-[12px] font-medium uppercase tracking-wide text-muted">1688 fiyat merdiveni</div>
-              <ul className="mt-2 space-y-1 text-[13px]">
-                {source.price.tiers.map((t) => (
-                  <li key={t.minQty} className="flex justify-between tnum">
-                    <span className="text-muted">{t.minQty}+ adet</span>
-                    <span>{money(t.unitPrice, "CNY")}</span>
-                  </li>
-                ))}
-              </ul>
-            </Card>
-            <Card className="p-4">
-              <div className="text-[12px] font-medium uppercase tracking-wide text-muted">Türkiye'ye indirilmiş maliyet · {qty} adet · hava kargo</div>
-              <ul className="mt-2 space-y-1 text-[13px]">
-                {cost.lines.map((l) => (
-                  <li key={l.key} className="flex justify-between tnum">
-                    <span className="text-muted">{l.label}</span>
-                    <span>{money(l.perUnit, "TRY")}</span>
-                  </li>
-                ))}
-                <li className="flex justify-between border-t border-border pt-1 font-medium tnum">
-                  <span>Birim maliyet</span>
-                  <span>{money(cost.perUnit, "TRY")}</span>
-                </li>
-                {margin && target && (
-                  <li className="flex justify-between tnum">
-                    <span className="text-muted">Trendyol {money(target.price.tiers[0]!.unitPrice, "TRY")} satışta net</span>
-                    <span className={margin.netPerUnit > 0 ? "text-success" : "text-danger"}>
-                      {money(margin.netPerUnit, "TRY")} ({pct(margin.marginRate)})
-                    </span>
-                  </li>
+          {!source ? (
+            <div className="mt-4"><Empty title="Tedarik ilanı yok" hint="Bu katalog ürünü için kaynak pazar ilanı bulunmuyor; maliyet hesaplanamaz." /></div>
+          ) : (
+            <div className="mt-4 grid gap-4 md:grid-cols-2">
+              <Card className="p-4">
+                <div className="text-[12px] font-medium uppercase tracking-wide text-muted">{reg.get(source.market)?.meta.name} fiyat merdiveni</div>
+                <ul className="mt-2 space-y-1 text-[13px]">
+                  {[...source.price.tiers].sort((a, b) => a.minQty - b.minQty).map((t, i) => (
+                    <li key={t.minQty} className={`flex justify-between tnum ${sc && i === sc.tierIndex ? "text-accent" : ""}`}>
+                      <span className="text-muted">{t.minQty}+ adet{sc && i === sc.tierIndex ? " · seçili" : ""}</span>
+                      <span>{money(t.unitPrice, source.price.currency)}</span>
+                    </li>
+                  ))}
+                </ul>
+              </Card>
+              <Card className="p-4">
+                <div className="flex items-center justify-between">
+                  <div className="text-[12px] font-medium uppercase tracking-wide text-muted">{countryName}'ye indirilmiş maliyet · {sc?.qty ?? "—"} adet · {sc?.shippingLabel ?? cost.shippingKey}</div>
+                  <Link to="/settings" className="text-[11px] text-accent hover:underline">ayarla</Link>
+                </div>
+                {sc ? (
+                  <ul className="mt-2 space-y-1 text-[13px]">
+                    {sc.cost.lines.map((l) => (
+                      <li key={l.key} className="flex justify-between tnum">
+                        <span className="text-muted">{l.label}</span>
+                        <span>{money(l.perUnit, sc.cost.currency)}</span>
+                      </li>
+                    ))}
+                    <li className="flex justify-between border-t border-border pt-1 font-medium tnum">
+                      <span>Birim maliyet</span>
+                      <span>{money(sc.cost.perUnit, sc.cost.currency)}</span>
+                    </li>
+                    {margin && target && sellPrice && (
+                      <li className="flex justify-between tnum">
+                        <span className="text-muted">{reg.get(target.market)?.meta.name} {money(sellPrice, target.price.currency)} satışta net</span>
+                        <span className={margin.netPerUnit > 0 ? "text-success" : "text-danger"}>
+                          {money(margin.netPerUnit, profile.currency)} ({pct(margin.marginRate)})
+                        </span>
+                      </li>
+                    )}
+                  </ul>
+                ) : (
+                  <p className="mt-2 text-[12px] text-muted">{source.price.currency} için kur yok.</p>
                 )}
-              </ul>
-              <p className="mt-2 text-[11px] text-muted">Kur 1 CNY = {FX_CNY_TRY} TRY varsayımı; oranlar {profile.asOf} tarihli. Sprint 4'te düzenlenebilir.</p>
-            </Card>
-          </div>
+                <p className="mt-2 text-[11px] text-muted">Kur 1 {source.price.currency} = {sc ? sc.fx.toFixed(4) : "—"} {profile.currency} (Ayarlar); oranlar {profile.asOf} tarihli{hs ? `; gümrük GTİP ${hs.hs} (${hs.label})` : ""}. Ayarlar'dan kur, kargo ve ağırlık değiştirilebilir.</p>
+              </Card>
+            </div>
+          )}
         </div>
       </div>
     </div>

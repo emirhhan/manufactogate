@@ -2,7 +2,8 @@
   "manifest_version": 3,
   "name": "Manufactogate",
   "description": "Çok pazarlı ürün araştırma köprüsü. Kendi oturumunla pazarlarda arama yapar, sonuçları Manufactogate uygulamasına taşır.",
-  "version": "0.7.0",
+  "version": "0.8.0",
+  "minimum_chrome_version": "116",
   "default_locale": "tr",
   "icons": {
     "16": "icons/16.png",
@@ -22,7 +23,9 @@
     "tabs",
     "scripting",
     "alarms",
-    "cookies"
+    "cookies",
+    "notifications",
+    "activeTab"
   ],
   "host_permissions": [
     "*://*.1688.com/*",
@@ -77,10 +80,12 @@
     },
     {
       "matches": [
-        "*://detail.1688.com/*",
-        "*://item.taobao.com/*",
-        "*://detail.tmall.com/*",
-        "*://mobile.yangkeduo.com/*",
+        "*://*.1688.com/*",
+        "*://*.taobao.com/*",
+        "*://*.tmall.com/*",
+        "*://*.tmall.hk/*",
+        "*://*.pinduoduo.com/*",
+        "*://*.yangkeduo.com/*",
         "*://*.trendyol.com/*",
         "*://*.hepsiburada.com/*",
         "*://*.n11.com/*",
@@ -89,26 +94,33 @@
         "*://*.amazon.com/*",
         "*://*.amazon.co.uk/*",
         "*://*.aliexpress.com/*",
+        "*://*.aliexpress.us/*",
         "*://*.alibaba.com/*",
         "*://*.dhgate.com/*",
+        "*://*.made-in-china.com/*",
+        "*://*.globalsources.com/*",
+        "*://*.yiwugo.com/*",
+        "*://*.indiamart.com/*",
+        "*://*.tradeindia.com/*",
+        "*://*.tokopedia.com/*",
+        "*://*.shopee.co.id/*",
+        "*://*.lazada.co.th/*",
+        "*://*.rakuten.co.jp/*",
+        "*://*.mercari.com/*",
+        "*://*.auctions.yahoo.co.jp/*",
+        "*://*.coupang.com/*",
+        "*://*.gmarket.co.kr/*",
         "*://*.ebay.com/*",
         "*://*.walmart.com/*",
-        "*://*.temu.com/*"
+        "*://*.temu.com/*",
+        "*://*.noon.com/*",
+        "*://*.ozon.ru/*",
+        "*://*.wildberries.ru/*"
       ],
       "js": [
         "overlay.js"
       ],
       "run_at": "document_idle"
-    }
-  ],
-  "web_accessible_resources": [
-    {
-      "resources": [
-        "extract.js"
-      ],
-      "matches": [
-        "<all_urls>"
-      ]
     }
   ]
 }

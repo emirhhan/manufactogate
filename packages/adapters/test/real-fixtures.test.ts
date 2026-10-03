@@ -110,7 +110,9 @@ describe("trendyol live search", () => {
     const it = items.find((i) => i.id === "963258390")!;
     expect(it.title).toBe("ENDRO ThunderBolt Mat Siyah Kask");
     expect(it.price).toBe(2549);
-    expect(it.sold).toBe(844);
+    // socialProof orderCount ("100+") is the sales signal; the 844 ratings are kept separately.
+    expect(it.sold).toBe(100);
+    expect(it.ratingCount).toBe(844);
     expect(it.rating).toBeCloseTo(4.56, 1);
     expect(it.url).toBe("https://www.trendyol.com/endro/thunderbolt-mat-siyah-kask-p-963258390?boutiqueId=61&merchantId=1033437");
     expect(it.image).toMatch(/^https:\/\/cdn\.dsmcdn\.com\//);

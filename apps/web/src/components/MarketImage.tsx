@@ -1,33 +1,77 @@
-import { useEffect, useState, type ImgHTMLAttributes } from "react";
+import { useEffect, useRef, useState, type ImgHTMLAttributes } from "react";
 import { placeholder } from "@/lib/catalog";
-import { imageToDataUrl } from "@/lib/images";
+import { cachedImageToDataUrl } from "@/lib/images";
 
-/** Market image that falls back to fetching through the extension when the CDN blocks hotlinking. */
-export function MarketImage({ src, label = "", ...rest }: ImgHTMLAttributes<HTMLImageElement> & { src: string | undefined; label?: string }) {
+/**
+ * Market image with a hotlink-safe fallback: when the CDN rejects the direct load, the image is
+ * fetched through the extension (cached, rate-limited) but only once the element is near the viewport,
+ * so a grid of 300 cards does not fire 300 extension round-trips at once.
+ */
+export function MarketImage({ src, label = "", eager = false, ...rest }: ImgHTMLAttributes<HTMLImageElement> & { src: string | undefined; label?: string; eager?: boolean }) {
   const [url, setUrl] = useState<string>(src ?? placeholder(label));
-  const [stage, setStage] = useState<"direct" | "proxied" | "placeholder">("direct");
+  const [failed, setFailed] = useState(false);
+  const [visible, setVisible] = useState(eager);
+  const stage = useRef<"direct" | "proxied" | "placeholder">("direct");
+  const ref = useRef<HTMLImageElement>(null);
+
   useEffect(() => {
     setUrl(src ?? placeholder(label));
-    setStage("direct");
+    setFailed(false);
+    stage.current = "direct";
   }, [src, label]);
+
+  useEffect(() => {
+    if (visible) return;
+    if (typeof IntersectionObserver === "undefined") {
+      setVisible(true);
+      return;
+    }
+    const el = ref.current;
+    if (!el) return;
+    const io = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((e) => e.isIntersecting)) {
+          setVisible(true);
+          io.disconnect();
+        }
+      },
+      { rootMargin: "240px" },
+    );
+    io.observe(el);
+    return () => io.disconnect();
+  }, [visible]);
+
+  useEffect(() => {
+    if (!failed || !visible || !src || stage.current !== "direct" || !/^https?:/.test(src)) return;
+    stage.current = "proxied";
+    let alive = true;
+    void cachedImageToDataUrl(src).then((d) => {
+      if (!alive) return;
+      if (d) setUrl(d);
+      else {
+        stage.current = "placeholder";
+        setUrl(placeholder(label));
+      }
+    });
+    return () => {
+      alive = false;
+    };
+  }, [failed, visible, src, label]);
+
   return (
     <img
+      ref={ref}
       {...rest}
       src={url}
       alt={rest.alt ?? ""}
       referrerPolicy="no-referrer"
       onError={() => {
-        if (stage === "direct" && src && /^https?:/.test(src)) {
-          setStage("proxied");
-          void imageToDataUrl(src).then((d) => {
-            if (d) setUrl(d);
-            else {
-              setStage("placeholder");
-              setUrl(placeholder(label));
-            }
-          });
-        } else if (stage !== "placeholder") {
-          setStage("placeholder");
+        if (stage.current === "direct" && src && /^https?:/.test(src)) {
+          // Show the placeholder while the proxied copy is on its way (or queued behind other images).
+          setUrl(placeholder(label));
+          setFailed(true);
+        } else if (stage.current !== "placeholder") {
+          stage.current = "placeholder";
           setUrl(placeholder(label));
         }
       }}

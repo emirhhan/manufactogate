@@ -1,13 +1,14 @@
 {
   "name": "@manufactogate/extension",
-  "version": "0.1.0",
+  "version": "0.8.0",
   "private": true,
   "type": "module",
   "scripts": {
     "dev": "vite build --watch",
     "build": "tsc --noEmit && vite build && vite build -c vite.extract.config.ts",
     "typecheck": "tsc --noEmit",
-    "e2e": "node e2e/bridge.mjs"
+    "e2e": "node e2e/bridge.mjs",
+    "test": "vitest run"
   },
   "dependencies": {
     "@manufactogate/adapters": "workspace:*",

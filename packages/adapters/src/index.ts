@@ -14,6 +14,7 @@ export * from "./translate";
 export * from "./wave2";
 export * from "./wave3";
 export { def1688, extractor1688, LINK_1688 } from "./cn-1688";
+export { PRICE_TL } from "./tr-trendyol";
 export { defTaobao, extractorTaobao, LINK_TAOBAO } from "./cn-taobao";
 export { defPinduoduo, extractorPinduoduo, LINK_PDD } from "./cn-pinduoduo";
 export { defTrendyol, extractorTrendyol, LINK_TRENDYOL } from "./tr-trendyol";

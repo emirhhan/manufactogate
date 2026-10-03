@@ -1,18 +1,22 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { TAXONOMY } from "@manufactogate/adapters";
+import { COUNTRY_NAMES_TR } from "@manufactogate/country-profiles";
+import { HomeReal } from "@/components/HomeReal";
+import { Onboarding } from "@/components/Onboarding";
 import { Pagination } from "@/components/Pagination";
 import { ProductCard } from "@/components/ProductCard";
 import { ResultCard } from "@/components/ResultCard";
-import { Button } from "@/components/ui";
-import { loadRealCatalog, queryRealCatalog, type RealFeedPage } from "@/lib/realCatalog";
 import { SearchBox } from "@/components/SearchBox";
-import { Empty, cn } from "@/components/ui";
+import { Button, Empty, Input, Select, SkeletonGrid, cn, usePageTitle } from "@/components/ui";
 import { groupOf, leafOf, leavesOf, queryFeed, type SortKey } from "@/lib/catalog";
+import { listingsWriteVersion } from "@/lib/db";
+import { money } from "@/lib/format";
+import { getRegistry } from "@/lib/registry";
+import { loadRealCatalog, queryRealCatalog, type Classified, type RealFeedPage } from "@/lib/realCatalog";
+import { useExtension } from "@/store/extension";
 import { useSearch } from "@/store/search";
 import { useSettings } from "@/store/settings";
-import { getDataSource } from "@/lib/registry";
-import { HomeReal } from "@/components/HomeReal";
 
 const SORTS: { key: SortKey; label: string }[] = [
   { key: "popular", label: "Popüler" },
@@ -21,9 +25,20 @@ const SORTS: { key: SortKey; label: string }[] = [
   { key: "margin", label: "Marj potansiyeli" },
 ];
 
+/** Hero facts derived from the registry instead of hardcoded copy. */
+function heroFacts(enabledIds: string[], targetCountry: string) {
+  const reg = getRegistry();
+  const all = reg.all();
+  const beta = all.filter((a) => a.meta.version.includes("beta")).length;
+  const img = all.filter((a) => a.meta.capabilities.imageSearch && !a.meta.version.includes("beta")).map((a) => a.meta.name);
+  const enabled = enabledIds.map((id) => reg.get(id as never)?.meta.name).filter((n): n is string => !!n);
+  const country = COUNTRY_NAMES_TR[targetCountry] ?? targetCountry.toUpperCase();
+  return { total: all.length, beta, img, enabled, country };
+}
+
 /**
  * Catalog feed: 30 products per page, filtered by group or leaf category and free text.
- * Routes: "/", "/c/:group", "/c/:group/:leaf". Query: ?q=&sort=&page=
+ * Routes: "/", "/c/:group", "/c/:group/:leaf". Query: ?q=&sort=&page=&market=
  */
 export function Feed() {
   const { group: groupKey, leaf: leafKey } = useParams();
@@ -32,8 +47,12 @@ export function Feed() {
   const start = useSearch((s) => s.start);
   const running = useSearch((s) => s.running);
   const enabled = useSettings((s) => s.enabledMarkets);
+  const targetCountry = useSettings((s) => s.targetCountry);
+  const dataSource = useExtension((s) => s.dataSource);
+  const real = dataSource === "extension";
 
   const q = sp.get("q") ?? "";
+  const market = sp.get("market") ?? "";
   const sort = (sp.get("sort") as SortKey | null) ?? "popular";
   const page = Number(sp.get("page") ?? "1") || 1;
   const [draft, setDraft] = useState(q);
@@ -48,7 +67,7 @@ export function Feed() {
     if (leafKey) o.leaf = leafKey;
     return o;
   }, [q, sort, page, groupKey, leafKey]);
-  const feed = useMemo(() => queryFeed(fq), [fq]);
+  const feed = useMemo(() => (real ? null : queryFeed(fq)), [fq, real]);
 
   const setParam = (k: string, v: string | null, resetPage = true) => {
     const next = new URLSearchParams(sp);
@@ -62,58 +81,76 @@ export function Feed() {
     window.scrollTo({ top: 0 });
   };
 
-  useEffect(() => {
-    document.title = leaf ? `${leaf.tr} · Manufactogate` : group ? `${group.tr} · Manufactogate` : "Manufactogate";
-  }, [leaf, group]);
+  usePageTitle(leaf ? leaf.tr : group ? group.tr : q ? `“${q}”` : undefined);
 
-  const real = getDataSource() === "extension";
   // Real-data mode: the catalog is every listing pulled so far, classified into the taxonomy on this device.
-  const [realItems, setRealItems] = useState<Awaited<ReturnType<typeof loadRealCatalog>> | null>(null);
+  const [realItems, setRealItems] = useState<Classified[] | null>(null);
+  const [realLoading, setRealLoading] = useState(false);
+  const writeVersion = listingsWriteVersion();
   useEffect(() => {
     if (!real) return;
     let alive = true;
-    void loadRealCatalog().then((it) => alive && setRealItems(it));
-    return () => { alive = false; };
-  }, [real, running]);
-  const realFeed: RealFeedPage | null = useMemo(() => (real && realItems ? queryRealCatalog(realItems, fq) : null), [real, realItems, fq]);
+    setRealLoading(true);
+    void loadRealCatalog(targetCountry)
+      .then((it) => alive && setRealItems(it))
+      .finally(() => alive && setRealLoading(false));
+    return () => {
+      alive = false;
+    };
+    // Re-classify when listings were written (a finished search bumps the version) and when the target changes.
+  }, [real, running, writeVersion, targetCountry]);
+  const realFeed: RealFeedPage | null = useMemo(() => {
+    if (!real || !realItems) return null;
+    const items = market ? realItems.filter((it) => it.listing.market === market) : realItems;
+    return queryRealCatalog(items, fq);
+  }, [real, realItems, fq, market]);
   const liveSearch = async () => {
-    if (running) return;
+    if (running || !enabled.length) return;
     const query = q || leaf?.tr || group?.tr;
     if (!query) return;
     const id = await start({ kind: "text", query }, enabled);
     nav(`/search/${id}`);
   };
-  const total = realFeed ? realFeed.total : feed.total;
-  const pageNo = realFeed ? realFeed.page : feed.page;
-  const pages = realFeed ? realFeed.pages : feed.pages;
+  const total = realFeed ? realFeed.total : (feed?.total ?? 0);
+  const pageNo = realFeed ? realFeed.page : (feed?.page ?? 1);
+  const pages = realFeed ? realFeed.pages : (feed?.pages ?? 1);
+  const facts = useMemo(() => heroFacts(enabled, targetCountry), [enabled, targetCountry]);
+  const showHero = !groupKey && !q;
+  const sorts = real && realFeed && realFeed.withMargin === 0 ? SORTS.filter((s) => s.key !== "margin") : SORTS;
+  const marketName = market ? (getRegistry().get(market as never)?.meta.name ?? market) : "";
 
   return (
     <div className="mx-auto max-w-[1440px] px-4 py-5">
-      {/* Hero search: image, link or text across the enabled markets */}
-      {!groupKey && !q && (
-        <div className="mb-5 overflow-hidden rounded-2xl border border-border bg-[linear-gradient(135deg,var(--surface)_0%,var(--surface-2)_100%)] p-6 sm:p-8">
-          <div className="max-w-[760px]">
+      {showHero && (
+        <div className="hero mb-5 rounded-2xl border border-border p-6 sm:p-8">
+          <div className="relative max-w-[760px]">
             <div className="text-[11px] font-medium uppercase tracking-[0.14em] text-accent">Çok pazarlı tedarik araştırması</div>
             <h1 className="mt-2 text-2xl font-semibold tracking-tight sm:text-3xl">Ürünü bul, kaynağına in, maliyetini gör.</h1>
-            <p className="mt-2 text-muted">Bir görsel, bir ürün linki ya da ürün adı. 1688, Taobao, Pinduoduo ve Trendyol'da aynı ürün aranır; fiyatlar, tedarikçiler ve Türkiye'ye indirilmiş maliyet yan yana gelir.</p>
+            <p className="mt-2 text-muted">
+              Bir görsel, bir ürün linki ya da ürün adı. {facts.enabled.length ? `${facts.enabled.slice(0, 4).join(", ")}${facts.enabled.length > 4 ? ` ve ${facts.enabled.length - 4} pazar daha` : ""}` : "Seçili pazarlar"}
+              {"'"}da aynı ürün aranır; fiyatlar, tedarikçiler ve {facts.country}{"'"}ye indirilmiş maliyet yan yana gelir.
+            </p>
           </div>
-          <div className="mt-5">
+          <div className="relative mt-5">
             <SearchBox
               busy={running}
+              marketCount={enabled.length}
+              onLink={(url) => nav(`/l/resolve/${encodeURIComponent(url)}?compare=1`)}
               onSubmit={async (input, thumb) => {
                 const id = await start(input, enabled, thumb);
                 nav(`/search/${id}`);
               }}
             />
           </div>
-          <div className="mt-3 flex flex-wrap gap-x-5 gap-y-1 text-[12px] text-muted">
+          <div className="relative mt-3 flex flex-wrap gap-x-5 gap-y-1 text-[12px] text-muted">
             <span>● Kendi oturumunla, sunucusuz</span>
-            <span>● 430 kategori, 4 pazar, 5 beta pazar</span>
-            <span>● Görselle arama: 1688, Taobao, Trendyol</span>
+            <span>● {facts.total} pazar ({facts.beta} beta) · <Link to="/settings" className="text-accent hover:underline">{enabled.length} açık</Link></span>
+            <span>● Görselle arama: {facts.img.join(", ")}</span>
           </div>
         </div>
       )}
-      {real && !groupKey && !q && <HomeReal />}
+      {showHero && <Onboarding className="mb-5" />}
+      {real && showHero && <HomeReal />}
       {/* Category rail */}
       <div className="-mx-4 mb-4 overflow-x-auto border-b border-border px-4 pb-3">
         <div className="flex gap-1.5 whitespace-nowrap text-[13px]">
@@ -137,7 +174,12 @@ export function Feed() {
           {real && (
             <div className="rounded-lg border border-accent/30 bg-accent/5 p-3 text-[12px]">
               <div className="font-medium text-accent">Gerçek veri modu</div>
-              <p className="mt-1 text-muted">Katalog, pazarlardan çektiğin {realItems?.length.toLocaleString("tr-TR") ?? "…"} gerçek ilandan oluşur ve kategoriye göre süzülür. Daha fazlası için canlı arama başlat.</p>
+              <p className="mt-1 text-muted">Katalog, pazarlardan çektiğin {realItems ? realItems.length.toLocaleString("tr-TR") : "…"} gerçek ilandan oluşur ve kategoriye göre süzülür. Daha fazlası için canlı arama başlat.</p>
+              {market && (
+                <button type="button" onClick={() => setParam("market", null)} className="mt-2 text-accent hover:underline">
+                  Pazar süzgecini kaldır ({marketName}) ✕
+                </button>
+              )}
             </div>
           )}
           {group ? (
@@ -185,57 +227,77 @@ export function Feed() {
               <h1 className="text-lg font-semibold tracking-tight">
                 {leaf ? leaf.tr : group ? group.tr : "Katalog"}
                 {q && <span className="text-muted"> · “{q}”</span>}
+                {market && <span className="text-muted"> · {marketName}</span>}
               </h1>
               <div className="text-[12px] text-muted tnum">
-                {total.toLocaleString("tr-TR")} ürün · sayfa {pageNo}/{pages}{realFeed ? " · gerçek ilanlar" : ""}
+                {realLoading && !realFeed ? "gerçek ilanlar sınıflandırılıyor…" : `${total.toLocaleString("tr-TR")} ürün · sayfa ${pageNo}/${pages}${realFeed ? " · gerçek ilanlar" : ""}`}
               </div>
             </div>
             <form
-              className="ml-auto flex items-center gap-2"
+              className="ml-auto flex flex-wrap items-center gap-2"
               onSubmit={(e) => {
                 e.preventDefault();
                 setParam("q", draft.trim());
               }}
             >
-              <input
+              <Input
                 value={draft}
                 onChange={(e) => setDraft(e.target.value)}
+                aria-label="Katalogda ara"
                 placeholder={leaf ? `${leaf.tr} içinde ara` : group ? `${group.tr} içinde ara` : "Ürün, model veya kategori ara"}
-                className="h-9 w-64 rounded-md border border-border bg-bg px-3 text-[13px] outline-none placeholder:text-muted focus:border-accent"
+                className="w-56 sm:w-64"
               />
               {real && (leaf || group || q) && (
-                <Button variant="primary" type="button" onClick={() => void liveSearch()} disabled={running}>
+                <Button variant="primary" type="button" onClick={() => void liveSearch()} disabled={running || !enabled.length} title={!enabled.length ? "Önce Ayarlar'dan pazar aç" : undefined}>
                   {running ? "Aranıyor…" : `Pazarlarda canlı ara`}
                 </Button>
               )}
-              <select value={sort} onChange={(e) => setParam("sort", e.target.value)} className="h-9 rounded-md border border-border bg-surface px-2 text-[13px]">
-                {SORTS.map((s) => (
+              <Select value={sorts.some((s) => s.key === sort) ? sort : "popular"} onChange={(e) => setParam("sort", e.target.value)} aria-label="Sıralama" className="w-auto">
+                {sorts.map((s) => (
                   <option key={s.key} value={s.key}>
                     {s.label}
                   </option>
                 ))}
-              </select>
+              </Select>
             </form>
           </div>
 
-          {realFeed ? (
-            realFeed.items.length === 0 ? (
+          {real ? (
+            !realFeed ? (
+              <div className="mt-4">
+                <SkeletonGrid count={10} />
+              </div>
+            ) : realFeed.items.length === 0 ? (
               <div className="mt-6">
-                <Empty title="Bu kategoride henüz gerçek ilan yok" hint="“Pazarlarda canlı ara” ile seçili pazarlardan çek; sonuçlar buraya da düşer." />
+                <Empty
+                  title={realItems && realItems.length === 0 ? "Henüz gerçek ilan yok" : "Bu kategoride henüz gerçek ilan yok"}
+                  hint={enabled.length ? "“Pazarlarda canlı ara” ile seçili pazarlardan çek; sonuçlar buraya da düşer." : "Önce Ayarlar'dan en az bir pazar aç."}
+                  action={(leaf || group || q) && enabled.length ? <Button variant="primary" onClick={() => void liveSearch()} disabled={running}>Pazarlarda canlı ara</Button> : undefined}
+                />
               </div>
             ) : (
-              <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5">
-                {realFeed.items.map((l) => (
-                  <ResultCard key={`${l.market}:${l.id}`} listing={l} />
-                ))}
+              <div className="mt-4 grid grid-cols-[repeat(auto-fill,minmax(150px,1fr))] gap-3 sm:grid-cols-[repeat(auto-fill,minmax(190px,1fr))]">
+                {realFeed.items.map((l) => {
+                  const m = realFeed.margins[`${l.market}:${l.id}`];
+                  return (
+                    <div key={`${l.market}:${l.id}`} className="relative">
+                      <ResultCard listing={l} />
+                      {m && sort === "margin" && (
+                        <span className="pointer-events-none absolute right-2 top-2 rounded-md bg-success px-1.5 py-0.5 text-[11px] font-semibold text-white tnum" title={`Hedef pazarda ${money(m.targetPrice, m.targetCurrency)} · eşleşme %${Math.round(m.matchScore * 100)}`}>
+                          ×{m.ratio.toFixed(1)}
+                        </span>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             )
-          ) : feed.items.length === 0 ? (
+          ) : !feed || feed.items.length === 0 ? (
             <div className="mt-6">
               <Empty title="Bu filtrelerle ürün yok" hint="Arama terimini kısalt veya üst kategoriye dön." />
             </div>
           ) : (
-            <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5">
+            <div className="mt-4 grid grid-cols-[repeat(auto-fill,minmax(150px,1fr))] gap-3 sm:grid-cols-[repeat(auto-fill,minmax(190px,1fr))]">
               {feed.items.map((it) => (
                 <ProductCard key={it.product.id} item={it} />
               ))}
