@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import { expect, it } from "vitest";
 import { parsePrice } from "../src/dom/text";
-import { extractCards, fullSizeImage } from "../src/dom/cards";
+import { extractCards } from "../src/dom/cards";
 it("price labels: real-world strings parse to the amount shown to the buyer", () => {
   const cases: [string, number][] = [
     ["¥12.50",12.5],["1.299,90 TL",1299.9],["1,299.00",1299],["$1,234.5",1234.5],["12.5-18.9",12.5],["¥ 1.2万",12000],
@@ -15,13 +15,11 @@ it("price labels: real-world strings parse to the amount shown to the buyer", ()
   expect(bad).toEqual([]);
 });
 
-it("card images: lazy placeholders are skipped, the largest srcset entry and a usable thumbnail size win", () => {
-  expect(fullSizeImage("https://img.alicdn.com/bao/x.jpg_60x60q90.jpg_.webp")).toBe("https://img.alicdn.com/bao/x.jpg_400x400.jpg");
-  expect(fullSizeImage("https://img.alicdn.com/bao/x.jpg_800x800.jpg")).toBe("https://img.alicdn.com/bao/x.jpg_800x800.jpg");
-  expect(fullSizeImage("https://cdn.example.com/a_60x60.jpg")).toBe("https://cdn.example.com/a_60x60.jpg");
+it("card images: lazy placeholders and flag attributes are skipped, the largest srcset entry wins", () => {
   document.body.innerHTML = `
     <div class="item"><a href="https://detail.1688.com/offer/111.html"><img src="//g.alicdn.com/s.gif" data-ks-lazyload="//cbu01.alicdn.com/img/a.jpg"><span>保温杯 不锈钢 大容量</span></a><b>¥12.50</b></div>
-    <div class="item"><a href="https://detail.1688.com/offer/222.html"><img src="/img/loading.gif" srcset="https://cbu01.alicdn.com/img/b-200.jpg 200w, https://cbu01.alicdn.com/img/b-800.jpg 800w"><span>保温杯 双层 真空</span></a><b>¥9.90</b></div>`;
+    <div class="item"><a href="https://detail.1688.com/offer/222.html"><img src="/img/loading.gif" srcset="https://cbu01.alicdn.com/img/b-200.jpg 200w, https://cbu01.alicdn.com/img/b-800.jpg 800w"><span>保温杯 双层 真空</span></a><b>¥9.90</b></div>
+    <div class="item"><a href="https://detail.1688.com/offer/333.html"><img data-lazy="true" data-img="1" src="https://cbu01.alicdn.com/img/c.jpg"><span>保温杯 儿童 吸管</span></a><b>¥15.00</b></div>`;
   const cards = extractCards(document, { link: /detail\.1688\.com\/offer\/(\d+)\.html/ }, "https://s.1688.com/");
-  expect(cards.map((c) => c.image)).toEqual(["https://cbu01.alicdn.com/img/a.jpg", "https://cbu01.alicdn.com/img/b-800.jpg"]);
+  expect(cards.map((c) => c.image)).toEqual(["https://cbu01.alicdn.com/img/a.jpg", "https://cbu01.alicdn.com/img/b-800.jpg", "https://cbu01.alicdn.com/img/c.jpg"]);
 });

@@ -7,15 +7,18 @@
  * (worker restart) or answered with an error (extension reloaded) instead of waiting for the
  * page's own timeout. A newly injected copy retires older copies through a DOM event.
  */
-const WEB_SOURCE = "manufactogate-web";
-const EXT_SOURCE = "manufactogate-ext";
-const PORT_NAME = "mg";
-const MARKER = "data-manufactogate-ext";
-const TEARDOWN_EVENT = "manufactogate-ext-teardown";
-const READY_EVENT = "manufactogate-ext-ready";
-const MSG_DISCONNECTED = "Eklenti bağlantısı koptu; sayfayı yenile";
-
+// Everything lives inside the IIFE: after an extension update the background injects this file
+// again into tabs that still hold the old copy, and a top-level `const` would then throw
+// "Identifier has already been declared" and leave the page without a bridge.
 (() => {
+  const WEB_SOURCE = "manufactogate-web";
+  const EXT_SOURCE = "manufactogate-ext";
+  const PORT_NAME = "mg";
+  const MARKER = "data-manufactogate-ext";
+  const TEARDOWN_EVENT = "manufactogate-ext-teardown";
+  const READY_EVENT = "manufactogate-ext-ready";
+  const MSG_DISCONNECTED = "Eklenti bağlantısı koptu; sayfayı yenile";
+
   const version = (() => {
     try {
       return chrome.runtime.getManifest().version;

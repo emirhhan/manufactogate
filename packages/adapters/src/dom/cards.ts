@@ -223,6 +223,9 @@ function selectorText(root: Element, selectors: string[] | undefined, skip?: str
 /** Lazy-load stand-ins sites put in `src` until the real image scrolls in. */
 const LAZY_PLACEHOLDER = /(?:^|\/)(?:s|blank|spacer|spaceball|transparent|pixel|grey|gray|loading|lazy|default|placeholder|empty)[-_.]?(?:\d+x\d+)?\.(?:gif|png|jpe?g|webp|svg)(?:[?#]|$)|\/1x1\.|loading\.gif/i;
 
+/** An absolute, protocol-relative or root-relative address, or a path naming an image file. */
+const LOOKS_LIKE_URL = /^(?:https?:)?\/\/|^\/[^/]|\.(?:jpe?g|png|webp|gif|avif)(?:[?#_]|$)/i;
+
 /** Largest candidate of a srcset ("a.jpg 200w, b.jpg 800w" → b.jpg). */
 function largestFromSrcset(srcset: string): string {
   let best = "";
@@ -243,21 +246,12 @@ function imageUrlOf(img: Element): string {
   const srcset = img.getAttribute("srcset") || img.getAttribute("data-srcset") || "";
   const fromSet = largestFromSrcset(srcset);
   const attrs = ["data-src", "data-lazy-src", "data-original", "data-ks-lazyload", "data-lazyload", "data-lazy", "data-img", "data-image", "data-src-pb", "src"];
-  for (const u of [...attrs.map((a) => img.getAttribute(a)), fromSet]) {
-    if (u && !u.startsWith("data:") && !/^\s*$/.test(u) && !LAZY_PLACEHOLDER.test(u)) return u.trim();
+  for (const raw of [...attrs.map((a) => img.getAttribute(a)), fromSet]) {
+    const u = raw?.trim();
+    // Lazy-load attributes are sometimes flags ("true", "1"); only an address counts.
+    if (u && LOOKS_LIKE_URL.test(u) && !LAZY_PLACEHOLDER.test(u)) return u;
   }
   return "";
-}
-
-/**
- * Alibaba-family CDNs serve thumbnails through a size suffix ("…jpg_60x60q90.jpg_.webp"). A thumbnail
- * under 300 px is too small to show or compare, so it is swapped for the 400 px rendition.
- */
-export function fullSizeImage(url: string): string {
-  if (!/alicdn\.com|tbcdn\.cn/.test(url)) return url;
-  const m = /^(.*?\.(?:jpe?g|png|webp))_(\d+)x(\d+)[^/]*$/i.exec(url);
-  if (m && Math.max(Number(m[2]), Number(m[3])) < 300) return `${m[1]}_400x400.jpg`;
-  return url;
 }
 
 function usableImage(img: Element): string | null {
@@ -275,18 +269,18 @@ function bestImage(card: Element, base: string, anchors: Element[], selectors?: 
   for (const sel of selectors ?? []) {
     const el = card.querySelector(sel);
     const src = el ? usableImage(el) : null;
-    if (src) return fullSizeImage(absUrl(src, base));
+    if (src) return absUrl(src, base);
   }
   // Prefer an image inside one of the product links, then any usable image in the card.
   for (const a of anchors) {
     for (const img of a.querySelectorAll("img")) {
       const src = usableImage(img);
-      if (src) return fullSizeImage(absUrl(src, base));
+      if (src) return absUrl(src, base);
     }
   }
   for (const img of card.querySelectorAll("img")) {
     const src = usableImage(img);
-    if (src) return fullSizeImage(absUrl(src, base));
+    if (src) return absUrl(src, base);
   }
   const bg = card.querySelector<HTMLElement>("[style*='background-image']");
   const m = /url\(["']?([^"')]+)["']?\)/.exec(bg?.getAttribute("style") ?? "");
