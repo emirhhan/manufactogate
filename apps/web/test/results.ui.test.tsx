@@ -107,6 +107,39 @@ describe("MarketPanel (happy-dom)", () => {
   });
 });
 
+describe("photo search: the named product", () => {
+  it("shows what the photo was taken to be, and 'Düzenle' re-runs the photo search under the corrected name", async () => {
+    const base = seedResults(6);
+    const input = { kind: "image" as const, image: { dataUrl: "data:image/jpeg;base64,AAAA" } };
+    const current: SearchRecord = { ...base, input, thumb: "data:image/jpeg;base64,AAAA" };
+    const start = vi.fn(async () => "s2");
+    useSearch.setState({ current, input, effective: input, identity: { title: "Hermès siyah deri çapraz çanta", queries: { zh: "爱马仕 黑色 皮革 斜挎包" }, source: "local", confidence: 0.82 }, start });
+    mount(<Results />, "/search/s1");
+    expect(text()).toContain("Fotoğraftaki ürün:");
+    expect(text()).toContain("Hermès siyah deri çapraz çanta");
+    expect(text()).toContain("ücretsiz modelle tanındı · %82 emin");
+    click([...host.querySelectorAll("button")].find((b) => b.textContent === "Düzenle") ?? null);
+    const field = host.querySelector<HTMLInputElement>("input[aria-label='Ürünün adı']")!;
+    expect(field.value).toBe("Hermès siyah deri çapraz çanta");
+    act(() => {
+      const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!;
+      setter.call(field, "Hermès Kelly 28 çanta");
+      field.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    act(() => {
+      field.form!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+    });
+    await flush();
+    expect(start).toHaveBeenCalledWith({ kind: "image", image: input.image, title: "Hermès Kelly 28 çanta" }, ["cn-1688", "cn-taobao", "tr-trendyol"], current.thumb);
+  });
+
+  it("text searches never show it", () => {
+    seedResults(3, { identity: { title: "kupa", source: "local" } });
+    mount(<Results />, "/search/s1");
+    expect(text()).not.toContain("Fotoğraftaki ürün");
+  });
+});
+
 /** A finished search with `n` listings spread over the three fake markets, set straight into the store. */
 function seedResults(n: number, extra: Partial<ReturnType<typeof useSearch.getState>> = {}): SearchRecord {
   const ids = ["cn-1688", "cn-taobao", "tr-trendyol"] as const;

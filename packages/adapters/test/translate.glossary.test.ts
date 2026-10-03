@@ -93,6 +93,10 @@ describe("brand/model tokenizer (C06)", () => {
     expect(brandModel("Apple iPhone 15 Pro Max 256GB Siyah")).toEqual({ brand: "Apple", models: ["iPhone", "15", "Pro", "Max"], attrs: ["256GB"] });
     expect(brandModel("Xiaomi Redmi Buds 4 Pro Kablosuz Kulaklık Siyah").models).toEqual(["Redmi", "Buds", "4", "Pro"]);
     expect(brandModel("500ml Termos").brand).toBe("");
+    // Accented brands stay one word and are written the way shoppers type them.
+    expect(brandModel("Hermès Siyah Deri Çapraz Çanta").brand).toBe("Hermes");
+    expect(brandModel("Nestlé Kahve Makinesi").brand).toBe("Nestle");
+    expect(brandModel("Çapraz Çanta Siyah").brand).toBe("");
   });
 });
 

@@ -1,4 +1,5 @@
 import { useMemo } from "react";
+import type { ClaudeModel } from "@/lib/claudeIdentify";
 import { setVisualAi } from "@/lib/fingerprinter";
 import { create } from "zustand";
 import { applyCountryOverrides, sanitizeCountryOverrides, type CountryOverrides, type CountryProfile, type MarketId } from "@manufactogate/core";
@@ -29,6 +30,14 @@ export interface SearchSettings {
   visualAi: boolean;
 }
 export const DEFAULT_SEARCH: SearchSettings = { maxPerMarket: 150, visualAi: true };
+
+/** Optional, paid product naming with Claude; unused (and free) while `apiKey` is empty. */
+export interface ClaudeSettings {
+  apiKey: string;
+  model: ClaudeModel;
+}
+export const DEFAULT_CLAUDE: ClaudeSettings = { apiKey: "", model: "claude-opus-5-5" };
+const CLAUDE_MODEL_IDS: ClaudeModel[] = ["claude-opus-5-5", "claude-sonnet-5-5", "claude-haiku-4-5"];
 
 /** Currencies whose TRY rate the user can override in Settings (the rest keep the dated table). */
 export const EDITABLE_FX = ["CNY", "USD", "EUR", "GBP"] as const;
@@ -75,6 +84,7 @@ interface SettingsState {
   cost: CostSettings;
   displayCurrency: DisplayCurrency;
   search: SearchSettings;
+  claude: ClaudeSettings;
   fxRates: FxRates;
   /** User-edited cost figures by target country; absent fields keep the dated reference profile. */
   countryOverrides: CountryOverridesMap;
@@ -91,6 +101,7 @@ interface SettingsState {
   setCost(c: Partial<CostSettings>): void;
   setDisplayCurrency(c: DisplayCurrency): void;
   setSearch(s: Partial<SearchSettings>): void;
+  setClaude(c: Partial<ClaudeSettings>): void;
   setFxRate(code: string, rate: number | null): void;
   /** Merges a patch into a country's overrides; `null` on a field removes that override. */
   setCountryOverrides(country: string, patch: CountryOverridesPatch): void;
@@ -182,6 +193,7 @@ export const useSettings = create<SettingsState>((set, get) => ({
   cost: DEFAULT_COST,
   displayCurrency: "TRY",
   search: DEFAULT_SEARCH,
+  claude: DEFAULT_CLAUDE,
   fxRates: {},
   countryOverrides: {},
   onboardingDismissedAt: null,
@@ -208,13 +220,18 @@ export const useSettings = create<SettingsState>((set, get) => ({
       cost.shippingKey = shippingKeyFor(targetCountry, cost.shippingKey, countryOverrides[targetCountry]?.shippingKey);
       const displayCurrency = await read<DisplayCurrency>("displayCurrency", "TRY");
       const search = { ...DEFAULT_SEARCH, ...(await read<Partial<SearchSettings>>("search", {})) };
+      const storedClaude = await read<Partial<ClaudeSettings>>("claude", {});
+      const claude: ClaudeSettings = {
+        apiKey: typeof storedClaude.apiKey === "string" ? storedClaude.apiKey : "",
+        model: CLAUDE_MODEL_IDS.includes(storedClaude.model as ClaudeModel) ? (storedClaude.model as ClaudeModel) : DEFAULT_CLAUDE.model,
+      };
       const fxRates: FxRates = { CNY: cost.fxCnyTry, ...(await read<FxRates>("fxRates", {})) };
       if (fxRates.CNY !== cost.fxCnyTry) cost.fxCnyTry = fxRates.CNY ?? cost.fxCnyTry;
       const onboardingDismissedAt = await read<string | null>("onboardingDismissedAt", null);
       setDisplayCurrency(displayCurrency);
       applyFx(fxRates);
       applyTheme(theme);
-      set({ theme, enabledMarkets, targetCountry, dataSource, cost, displayCurrency, search, fxRates, countryOverrides, onboardingDismissedAt, hydrated: true, storageError });
+      set({ theme, enabledMarkets, targetCountry, dataSource, cost, displayCurrency, search, claude, fxRates, countryOverrides, onboardingDismissedAt, hydrated: true, storageError });
       setVisualAi(search.visualAi);
       if (enabledMarkets.length !== storedMarkets.length || enabledMarkets.some((m, i) => m !== storedMarkets[i])) void setSetting("enabledMarkets", enabledMarkets).catch(() => undefined);
     } catch (e) {
@@ -272,6 +289,11 @@ export const useSettings = create<SettingsState>((set, get) => ({
     set({ search });
     if (s.visualAi !== undefined) setVisualAi(search.visualAi);
     void setSetting("search", search).catch(() => undefined);
+  },
+  setClaude(c) {
+    const claude = { ...get().claude, ...c };
+    set({ claude });
+    void setSetting("claude", claude).catch(() => undefined);
   },
   setFxRate(code, rate) {
     const fxRates = { ...get().fxRates };

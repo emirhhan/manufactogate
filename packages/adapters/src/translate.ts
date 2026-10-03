@@ -432,6 +432,23 @@ function termName(term: Term, language: QueryLanguage): string {
   return n ?? term.en;
 }
 
+/** A glossary entry: Turkish, Chinese and English names plus native renderings for some markets. */
+export type GlossaryTerm = Term;
+
+const PHOTO_COLORS = ["siyah", "beyaz", "kırmızı", "mavi", "yeşil", "gri", "pembe", "sarı", "mor", "turuncu", "kahverengi", "lacivert", "altın", "gümüş", "şeffaf"];
+const PHOTO_MATERIALS = ["paslanmaz çelik", "silikon", "deri", "pamuk", "ahşap", "cam", "metal", "plastik"];
+
+/** Colours and materials a photo can show, from the attribute glossary (for naming a product from its photo). */
+export function photoTerms(): { colors: GlossaryTerm[]; materials: GlossaryTerm[] } {
+  const pick = (names: string[]) => names.map((n) => ATTR.find((a) => a.tr === n)).filter((t): t is Term => !!t);
+  return { colors: pick(PHOTO_COLORS), materials: pick(PHOTO_MATERIALS) };
+}
+
+/** A glossary term (or a taxonomy leaf) in a market's language; English where no native name is kept. */
+export function glossaryName(term: GlossaryTerm | Leaf, language: QueryLanguage): string {
+  return "key" in term ? leafName(term, language) : termName(term, language);
+}
+
 function leafName(leaf: Leaf, language: QueryLanguage): string {
   if (language === "zh") return leaf.zh;
   if (language === "tr") return leaf.tr;
@@ -702,10 +719,20 @@ export function localizeQuery(query: string, language: QueryLanguage): string {
   return localizeQueryLadder(query, language).rungs[0] ?? query;
 }
 
+/**
+ * Accents other than the Turkish letters are dropped ("Hermès" → "Hermes"): shoppers and market
+ * search boxes write brands without them, and a Turkish word must still look Turkish to the brand test.
+ */
+const TR_LETTER_SET = new Set([..."çğıöşüÇĞİÖŞÜ"]);
+function foldAccents(w: string): string {
+  return w.replace(/[\u00C0-\u024F]/g, (c) => (TR_LETTER_SET.has(c) ? c : c.normalize("NFD").replace(/\p{M}/gu, "")));
+}
+
 /** Brand (first latin, non-generic word), model tokens (series words and codes) and unit attributes of a title. */
 export function brandModel(title: string): { brand: string; models: string[]; attrs: string[] } {
   const t = title.replace(/\([^)]*\)|\[[^\]]*\]|（[^）]*）|【[^】]*】/g, " ");
-  const toks = t.match(/[A-Za-zÇĞİÖŞÜçğıöşü][\wÇĞİÖŞÜçğıöşü\-+]*(?:\/\d+)?|\d+(?:[.,]\d+)?[A-Za-z]{0,3}(?:\/\d+)?/g) ?? [];
+  // Latin-script words keep their accents ("Hermès", "Nestlé"); CJK runs are not words here.
+  const toks = (t.match(/\p{Script=Latin}[\p{Script=Latin}\d_\-+]*(?:\/\d+)?|\d+(?:[.,]\d+)?[A-Za-z]{0,3}(?:\/\d+)?/gu) ?? []).map(foldAccents);
   const cats = categoryWordSet();
   const attrs: string[] = [];
   const isStop = (w: string) => {

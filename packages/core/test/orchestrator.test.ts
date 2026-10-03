@@ -181,6 +181,48 @@ describe("runSearch", () => {
     expect(tr.calls[0]).toMatch(/hermes kelly/);
   });
 
+  it("(c6) a named product feeds text markets at once, in their language first, and is announced", async () => {
+    const tr = fakeAdapter({ id: "tr-a", language: "tr", results: { "Hermes çanta": [mk("tr-a", "1", "Hermes çanta")] } });
+    const zh = fakeAdapter({ id: "cn-z", language: "zh", results: { "爱马仕 包": [mk("cn-z", "2", "爱马仕 包")] } });
+    const identify = async () => ({ title: "Hermes çanta", queries: { zh: "爱马仕 包" }, source: "local" as const, confidence: 0.8 });
+    const events = await collect(runSearch({ kind: "image", image: { dataUrl: "data:," } }, [tr, zh], fp, { ...quick, ladder: (t) => [t], identify }));
+    expect(tr.calls).toEqual(["text:Hermes çanta"]);
+    expect(zh.calls[0]).toBe("text:爱马仕 包");
+    expect(events.find((e) => e.type === "identity")).toMatchObject({ identity: { title: "Hermes çanta", source: "local" } });
+    expect(notes(events, "tr-a")[0]).toMatchObject({ code: "image-title" });
+    expect(notes(events, "tr-a")[0]!.note).toContain("tanındı");
+  });
+
+  it("(c7) an image market whose image search finds nothing searches by the named product", async () => {
+    const img = fakeAdapter({ id: "cn-b", imageSearch: true, imageResults: [], results: { termos: [mk("cn-b", "1", "termos")] } });
+    const identify = async () => ({ title: "termos", source: "local" as const });
+    const events = await collect(runSearch({ kind: "image", image: { dataUrl: "data:," } }, [img], fp, { ...quick, ladder: (t) => [t], identify }));
+    expect(img.calls).toEqual(["image", "text:termos"]);
+    expect(statuses(events, "cn-b").at(-1)).toMatchObject({ state: "done", received: 1 });
+  });
+
+  it("(c8) without a name (null, error or timeout) text markets fall back to the image results' titles", async () => {
+    for (const identify of [async () => null, async () => Promise.reject(new Error("model")), () => new Promise<never>(() => undefined)]) {
+      const img = fakeAdapter({ id: "cn-b", imageSearch: true, imageResults: [mk("cn-b", "9", "hermes kelly bag"), mk("cn-b", "8", "hermes kelly bag 28")] });
+      const tr = fakeAdapter({ id: "tr-a", language: "tr", results: {} });
+      const events = await collect(runSearch({ kind: "image", image: { dataUrl: "data:," } }, [tr, img], fp, { ...quick, ladder: (t) => [t], identify, identifyTimeoutMs: 50 }));
+      expect(tr.calls[0]).toMatch(/hermes kelly/);
+      expect(events.some((e) => e.type === "identity")).toBe(false);
+    }
+  });
+
+  it("(c9) a title from the user is never replaced by a guess", async () => {
+    let asked = false;
+    const tr = fakeAdapter({ id: "tr-a", language: "tr", results: { termos: [mk("tr-a", "1", "termos")] } });
+    const identify = async () => {
+      asked = true;
+      return { title: "kupa", source: "local" as const };
+    };
+    await collect(runSearch({ kind: "image", image: { dataUrl: "data:," }, title: "termos" }, [tr], fp, { ...quick, ladder: (t) => [t], identify }));
+    expect(asked).toBe(false);
+    expect(tr.calls).toEqual(["text:termos"]);
+  });
+
   it("(c3) a remembered image failure does not block a photo-only search", async () => {
     const memo = fakeAdapter({ id: "cn-b", imageSearch: true, imageResults: [mk("cn-b", "9", "img")] });
     const events = await collect(runSearch({ kind: "image", image: { dataUrl: "data:," } }, [memo], fp, { ...quick, capabilityOverrides: { "cn-b": { imageSearch: false } } }));

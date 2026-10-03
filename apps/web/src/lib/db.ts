@@ -1,5 +1,5 @@
 import Dexie, { type EntityTable, type Table } from "dexie";
-import type { Cluster, MarketStatus, RawListing, SearchInput } from "@manufactogate/core";
+import type { Cluster, MarketStatus, ProductIdentity, RawListing, SearchInput } from "@manufactogate/core";
 
 /** Outcome of a search once it stops; absent while it runs (or when the tab was closed mid-search). */
 export type SearchStatus = "done" | "cancelled" | "error";
@@ -24,6 +24,8 @@ export interface SearchRecord {
   status?: SearchStatus;
   /** Why the search ended with `status: "error"`. */
   error?: string;
+  /** Photo-only searches: what the product was named (free model or Claude). */
+  identity?: ProductIdentity;
 }
 
 /**

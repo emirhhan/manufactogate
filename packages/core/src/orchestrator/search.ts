@@ -38,6 +38,18 @@ export type NoteCode =
   | "link-degraded"
   | "fingerprint-failed";
 
+/** What the product in a photo is, as named by a local model or by Claude; drives the text search of a photo-only search. */
+export interface ProductIdentity {
+  /** Turkish product name used as the search title ("Hermes siyah deri çapraz çanta"). */
+  title: string;
+  /** Ready-made queries per market language ("zh", "en", …), tried before the title's own ladder. */
+  queries?: Partial<Record<string, string>>;
+  /** Who named it: the in-browser model (free) or Claude (the user's own API key). */
+  source: "local" | "claude";
+  /** 0..1, how sure the namer is about the product type. */
+  confidence?: number;
+}
+
 export type SearchEvent =
   | { type: "market"; market: MarketId; status: MarketStatus }
   | { type: "listing"; market: MarketId; listing: RawListing }
@@ -48,6 +60,8 @@ export type SearchEvent =
   /** A link input was resolved to a listing and fanned out as `input`. */
   | { type: "resolved"; market: MarketId; listing: RawListingDetail; input: SearchInput }
   | { type: "warning"; code: "query-fingerprint-failed" | "link-unresolved" | "internal"; text: string }
+  /** A photo-only search named its product; markets that search by text use this title. */
+  | { type: "identity"; identity: ProductIdentity }
   | { type: "finished"; durationMs: number; cancelled?: boolean };
 
 export interface Fingerprinter {
@@ -93,6 +107,14 @@ export interface SearchRunOptions {
   imageLoader?: (listing: RawListingDetail) => Promise<ImageInput | null>;
   /** Language-neutral category key (taxonomy leaf) for a title; used for the query and every listing. */
   categorize?: (title: string) => string | undefined;
+  /**
+   * Names the product of a photo-only search (the user gave no title). Markets that search by text
+   * use its title right away instead of borrowing titles from image-search results; null, an error
+   * or the timeout falls back to borrowing.
+   */
+  identify?: (input: Extract<SearchInput, { kind: "image" }>, queryFp: Fingerprint, signal?: AbortSignal) => Promise<ProductIdentity | null>;
+  /** Longest wait for `identify` (default 25 s). */
+  identifyTimeoutMs?: number;
 }
 
 class TimeoutError extends Error {
@@ -471,6 +493,40 @@ export async function* runSearch(
       emit({ type: "warning", code: "query-fingerprint-failed", text: `sorgu parmak izi çıkarılamadı (${err instanceof Error ? err.message : String(err)}); başlıkla eşleştiriliyor` });
     }
     const mainTitle = effective.kind === "image" ? effective.title : effective.kind === "text" ? effective.query : resolvedTitle;
+
+    // Photo-only search: name the product (local model or Claude) while the image markets start.
+    let identity: Promise<ProductIdentity | null> | undefined;
+    if (effective.kind === "image" && !effective.title?.trim() && opts.identify && toRun.length) {
+      const photo = effective;
+      const identify = opts.identify;
+      identity = new Promise<ProductIdentity | null>((resolve) => {
+        const timer = later(() => resolve(null), opts.identifyTimeoutMs ?? 25_000);
+        const done = (id: ProductIdentity | null) => {
+          clearTimeout(timer);
+          timers.delete(timer);
+          resolve(id?.title.trim() ? id : null);
+        };
+        signal?.addEventListener("abort", () => done(null), { once: true });
+        identify(photo, queryFp, signal).then(done, () => done(null));
+      });
+      void identity.then((id) => {
+        if (id && !aborted()) emit({ type: "identity", identity: id });
+      });
+    }
+    /** Title for markets that search by text on a photo-only search: the named product, else one borrowed from image results. */
+    let borrowed: Promise<{ title: string; queries?: Partial<Record<string, string>>; from: "identity" | "results" } | undefined> | undefined;
+    const borrowedTitle = () =>
+      (borrowed ??= (async () => {
+        const id = identity ? await identity : null;
+        if (id) return { title: id.title, ...(id.queries ? { queries: id.queries } : {}), from: "identity" as const };
+        const t = derivedTitle ? await derivedTitle : undefined;
+        return t ? { title: t, from: "results" as const } : undefined;
+      })());
+    const borrowedLadder = (b: { title: string; queries?: Partial<Record<string, string>> }, adapter: MarketAdapter): string[] => {
+      const own = b.queries?.[adapter.meta.language]?.trim();
+      const rungs = opts.ladder ? opts.ladder(b.title, adapter) : [b.title];
+      return [...new Set([...(own ? [own] : []), ...rungs].map((r) => r.trim()).filter(Boolean))];
+    };
     if (!queryFp.title && mainTitle) queryFp.title = mainTitle;
     const alts = new Set<string>();
     const ladders = effective.kind === "text" ? effective.perMarket : effective.kind === "image" ? effective.titles : undefined;
@@ -533,6 +589,12 @@ export async function* runSearch(
         emit({ type: "market", market: adapter.id, status: { state: "done", received, durationMs: Date.now() - t0, ...(aborted() ? { cancelled: true } : {}) } });
       try {
         let ladder = ladderFor(effective, adapter);
+        /** An image market whose own search came back empty can still search by the named product. */
+        const identityLadder = async () => {
+          if (ladder.length || !identity) return;
+          const id = await identity;
+          if (id && !aborted()) ladder = borrowedLadder(id, adapter);
+        };
         const lang = adapter.meta.language;
         if (effective.kind === "text" && lang !== "tr" && ladder.length > 1) {
           const kept = ladder.filter((r) => !(r === effective.query && TURKISH_LETTERS.test(r)));
@@ -600,20 +662,28 @@ export async function* runSearch(
               if (err instanceof AbortedError) throw err;
               const e = err instanceof AdapterError ? err : null;
               if (e && (e.type === "LoggedOut" || e.type === "Captcha")) throw err;
+              await identityLadder();
               if (!ladder.length) throw err;
               failed = true;
               emit({ type: "note", market: adapter.id, code: "image-fallback", note: `görselle arama başarısız (${err instanceof Error ? err.message : String(err)}), başlıkla arandı` });
             }
+            if (received === 0 && !aborted()) await identityLadder();
             if (received === 0 && ladder.length && !aborted()) {
               if (!failed) emit({ type: "note", market: adapter.id, code: "image-empty", note: "görselle arama sonuç vermedi, başlıkla arandı" });
               await textLadder();
             }
           } else {
-            if (!ladder.length && derivedTitle && opts.ladder) {
-              const t = await derivedTitle;
-              if (t && !aborted()) {
-                ladder = opts.ladder(t, adapter).map((r) => r.trim()).filter(Boolean);
-                if (ladder.length) emit({ type: "note", market: adapter.id, code: "image-title", note: `görselle bulunan ürünün başlığıyla arandı: "${ladder[0]}"` });
+            if (!ladder.length && (identity || derivedTitle)) {
+              const b = await borrowedTitle();
+              if (b && !aborted()) {
+                ladder = borrowedLadder(b, adapter);
+                if (ladder.length)
+                  emit({
+                    type: "note",
+                    market: adapter.id,
+                    code: "image-title",
+                    note: b.from === "identity" ? `fotoğraftaki ürün tanındı, "${ladder[0]}" ile arandı` : `görselle bulunan ürünün başlığıyla arandı: "${ladder[0]}"`,
+                  });
               }
             }
             if (!ladder.length) {
@@ -639,12 +709,12 @@ export async function* runSearch(
       }
     };
 
-    // Photo-only search: markets without image search borrow the title of the first listing an
-    // image-search market finds. They wait outside a concurrency slot so image markets can run.
+    // Photo-only search: markets without image search use the named product, else borrow a title from
+    // the listings image-search markets find. They wait outside a concurrency slot so image markets can run.
     const imageMarkets = effective.kind === "image" ? toRun.filter((a) => a.meta.capabilities.imageSearch) : [];
     const waitsForTitle = (a: MarketAdapter) =>
-      effective.kind === "image" && !!opts.ladder && imageMarkets.length > 0 && !imageMarkets.includes(a) && ladderFor(effective, a).length === 0;
-    if (toRun.some(waitsForTitle)) {
+      effective.kind === "image" && (imageMarkets.length > 0 || !!identity) && !imageMarkets.includes(a) && ladderFor(effective, a).length === 0;
+    if (toRun.some(waitsForTitle) && imageMarkets.length > 0) {
       derivedTitle = new Promise<string | undefined>((r) => (resolveDerived = r));
       // One listing's title can be an odd seller code ("SKT STY 2026"): wait for a handful and take
       // the one that shares the most words with the others.
@@ -682,7 +752,7 @@ export async function* runSearch(
       else active--;
     };
     const tasks = ordered.map(async (adapter) => {
-      if (derivedTitle && waitsForTitle(adapter)) await derivedTitle;
+      if ((identity || derivedTitle) && waitsForTitle(adapter)) await borrowedTitle();
       await acquire();
       try {
         if (aborted()) {

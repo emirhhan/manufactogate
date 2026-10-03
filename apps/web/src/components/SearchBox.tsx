@@ -1,8 +1,10 @@
 import { useCallback, useRef, useState, type ClipboardEvent, type DragEvent } from "react";
 import { Link } from "react-router-dom";
 import type { SearchInput } from "@manufactogate/core";
+import { warmLabelBank } from "@/lib/identify";
 import { prepareImage, type PreparedImage } from "@/lib/imageResize";
 import { getRegistry } from "@/lib/registry";
+import { useSettings } from "@/store/settings";
 import { Button, Kbd, cn } from "./ui";
 
 export type Detected = { kind: "image"; dataUrl: string; name: string } | { kind: "link"; url: string } | { kind: "text"; query: string };
@@ -47,6 +49,8 @@ export function SearchBox({
 
   const takeFile = useCallback(async (file: File | undefined) => {
     if (!file || !file.type.startsWith("image/")) return;
+    // A photo search is coming: get the free product namer ready while the photo is prepared.
+    if (useSettings.getState().search.visualAi) warmLabelBank();
     setPreparing(true);
     try {
       setImage(await prepareImage(file));

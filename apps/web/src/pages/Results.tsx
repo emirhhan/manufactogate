@@ -1,8 +1,9 @@
 import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import { suspiciousPrices } from "@/lib/priceCheck";
-import { Link, useParams, useSearchParams } from "react-router-dom";
+import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { normalizeBadges, type MarketId, type RawListing } from "@manufactogate/core";
 import { ClusterCard } from "@/components/ClusterCard";
+import { IdentityChip } from "@/components/IdentityChip";
 import { CompareDrawer } from "@/components/CompareDrawer";
 import { MarketAnalysisCard } from "@/components/MarketAnalysis";
 import { MarketPanel } from "@/components/MarketPanel";
@@ -120,9 +121,18 @@ export function Results() {
 
   const reg = getRegistry();
   const input = s.current?.input;
+  const navigate = useNavigate();
+  /** Runs the photo search again under the user's own name for the product. */
+  const searchAs = async (title: string) => {
+    const cur = s.current;
+    if (!cur || cur.input.kind !== "image") return;
+    const id = await s.start({ kind: "image", image: cur.input.image, title }, cur.markets as MarketId[], cur.thumb);
+    navigate(`/search/${id}`);
+  };
   /** What the markets were really asked: the resolved listing's title/image for a link search. */
   const effective = s.effective ?? (input?.kind === "link" ? undefined : input);
-  const queryText = effective?.kind === "text" ? effective.query : effective?.kind === "image" ? (effective.title ?? "") : "";
+  // A photo-only search is scored against the name it got from the photo.
+  const queryText = effective?.kind === "text" ? effective.query : effective?.kind === "image" ? effective.title || s.identity?.title || "" : "";
   const deferredListings = useDeferredValue(s.listings);
 
   const all = useMemo(() => {
@@ -265,6 +275,7 @@ export function Results() {
         {s.current.thumb && <img src={s.current.thumb} alt="" className="h-12 w-12 rounded border border-border object-cover" />}
         <div className="min-w-0">
           <h1 className="truncate text-lg font-semibold tracking-tight">{title}</h1>
+          {s.identity && input?.kind === "image" && <IdentityChip identity={s.identity} busy={s.running} onSearch={(t) => void searchAs(t)} />}
           <div className="text-[12px] text-muted tnum">
             {total} sonuç · {summary.withResults}/{marketIds.length} pazar sonuç verdi
             {duration !== null ? ` · ${duration.toFixed(1)} sn` : s.running ? " · aranıyor…" : ""}

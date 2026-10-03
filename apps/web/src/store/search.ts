@@ -17,11 +17,13 @@ import {
   type SearchEvent,
   type SearchInput,
   type SearchRunOptions,
+  type ProductIdentity,
 } from "@manufactogate/core";
 import { categoryKey, localizeQueryLadder, queryLadder, TIMING } from "@manufactogate/adapters";
 import { cancelExtensionRuns } from "@/lib/bridge";
 import { db, getSetting, listingsForSearch, persistClusters, persistListings, setSetting, type ListingBatchItem, type SearchRecord } from "@/lib/db";
 import { browserFingerprinter } from "@/lib/fingerprinter";
+import { identifyProduct } from "@/lib/identify";
 import { imageToDataUrl } from "@/lib/images";
 import { getRegistry } from "@/lib/registry";
 import { useSettings, VERIFIED_MARKETS, WAVE1_MARKETS } from "@/store/settings";
@@ -100,6 +102,8 @@ export interface SearchState {
   retrying: string[];
   /** Markets whose image search failed recently; they skip the upload on the next search. */
   capabilityMemo: CapabilityMemo;
+  /** Photo-only search: the product as named from the photo (free model or Claude). */
+  identity?: ProductIdentity | undefined;
 
   start(input: SearchInput, marketIds: MarketId[], thumb?: string, sourceKey?: string): Promise<string>;
   retryMarket(market: MarketId): Promise<void>;
@@ -223,6 +227,10 @@ export function searchRunOptions(adapters: Pick<MarketAdapter, "id" | "meta">[],
     ladder: (title, adapter) => queryLadder(title, adapter.meta.language),
     ...(Object.keys(overrides).length ? { capabilityOverrides: overrides } : {}),
     ...(canImage ? { imageLoader: loadListingImage } : {}),
+    identify: (input, queryFp, signal) => {
+      const { search, claude } = useSettings.getState();
+      return identifyProduct(input.image, queryFp, { local: search.visualAi, claude: claude.apiKey.trim() ? claude : undefined }, signal);
+    },
   };
 }
 
@@ -388,6 +396,7 @@ export const useSearch = create<SearchState>((set, get) => {
         cancelled: false,
         durationMs: undefined,
         retrying: [],
+        identity: undefined,
       });
 
       const noteStorage = () => set({ storageNote: STORAGE_NOTE });
@@ -431,6 +440,10 @@ export const useSearch = create<SearchState>((set, get) => {
               const firstImage = ev.listing.images[0];
               if (!record.thumb && firstImage) record = { ...record, thumb: firstImage };
               set({ effective: ev.input, resolved: { market: ev.market, listing: ev.listing }, current: record });
+            } else if (ev.type === "identity") {
+              record = { ...record, identity: ev.identity };
+              set({ identity: ev.identity, current: record });
+              void save(record);
             } else if (ev.type === "finished") {
               await batcher.flush();
               const s = get();
@@ -492,12 +505,17 @@ export const useSearch = create<SearchState>((set, get) => {
       const imageMarkets = imageMarketsFor(input, [adapter], memo);
       const fp = wrapFingerprinter(sess, imageMarkets);
       const batch: ListingBatchItem[] = [];
+      // A photo search keeps the name it already got: a retry must not pay for (or re-guess) it again.
+      const known = get().identity;
+      const runOpts: SearchRunOptions = { ...searchRunOptions([adapter], memo, maxPerMarket), ...(known ? { identify: async () => known } : {}) };
       try {
-        for await (const ev of runSearch(input, [adapter], fp, searchRunOptions([adapter], memo, maxPerMarket))) {
+        for await (const ev of runSearch(input, [adapter], fp, runOpts)) {
           if (!mine()) return;
           if (ev.type === "listing") {
             set((s) => ({ listings: { ...s.listings, [ev.market]: [...(s.listings[ev.market] ?? []), ev.listing] } }));
             batch.push({ listing: ev.listing, order: batch.length });
+          } else if (ev.type === "identity") {
+            if (!get().identity) set({ identity: ev.identity });
           } else if (ev.type !== "clusters" && ev.type !== "finished" && ev.type !== "resolved") {
             applyCommon(ev, imageMarkets);
           }
@@ -599,6 +617,7 @@ export const useSearch = create<SearchState>((set, get) => {
         storageNote: undefined,
         warning: undefined,
         retrying: [],
+        identity: rec.identity,
       });
     },
   };
