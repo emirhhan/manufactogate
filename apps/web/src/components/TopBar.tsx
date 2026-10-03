@@ -40,6 +40,7 @@ export function TopBar({ extension, dataSource }: { extension: { installed: bool
             ["/", "Ürünler"],
             ["/categories", "Kategoriler"],
             ["/history", "Aramalarım"],
+            ["/bulk", "Toplu"],
             ["/projects", "Projeler"],
             ["/watchlist", "İzleme"],
             ["/settings", "Ayarlar"],

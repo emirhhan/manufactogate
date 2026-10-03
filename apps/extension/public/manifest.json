@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "Manufactogate",
   "description": "Çok pazarlı ürün araştırma köprüsü. Kendi oturumunla pazarlarda arama yapar, sonuçları Manufactogate uygulamasına taşır.",
-  "version": "0.6.0",
+  "version": "0.7.0",
   "default_locale": "tr",
   "icons": {
     "16": "icons/16.png",
@@ -74,6 +74,31 @@
         "content.js"
       ],
       "run_at": "document_start"
+    },
+    {
+      "matches": [
+        "*://detail.1688.com/*",
+        "*://item.taobao.com/*",
+        "*://detail.tmall.com/*",
+        "*://mobile.yangkeduo.com/*",
+        "*://*.trendyol.com/*",
+        "*://*.hepsiburada.com/*",
+        "*://*.n11.com/*",
+        "*://*.amazon.com.tr/*",
+        "*://*.amazon.de/*",
+        "*://*.amazon.com/*",
+        "*://*.amazon.co.uk/*",
+        "*://*.aliexpress.com/*",
+        "*://*.alibaba.com/*",
+        "*://*.dhgate.com/*",
+        "*://*.ebay.com/*",
+        "*://*.walmart.com/*",
+        "*://*.temu.com/*"
+      ],
+      "js": [
+        "overlay.js"
+      ],
+      "run_at": "document_idle"
     }
   ],
   "web_accessible_resources": [

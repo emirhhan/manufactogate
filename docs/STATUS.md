@@ -11,7 +11,7 @@ Güncelleme: 2026-10-03. "Doğrulandı" = kullanıcının tarayıcısında gerç
 | Bölge seçerek arama | Yapılmadı |
 | Link yapıştırma | Yapıldı; 33 pazarın linki çözülür |
 | Metin arama ve pazar diline çeviri | Yapıldı; Türkçe → Çince sözlükle, model kodları korunur. Japonca/Korece/Rusça için çeviri yok |
-| Toplu arama (CSV) | Yapılmadı |
+| Toplu arama (CSV) | Yapıldı (/bulk: satır başına sorgu, aralıklı sıralı arama, CSV indir) |
 
 ## 3.2 Arama motoru
 
@@ -31,14 +31,16 @@ Güncelleme: 2026-10-03. "Doğrulandı" = kullanıcının tarayıcısında gerç
 | Fiyat merdiveni | Yapıldı (1688 detay) |
 | Fiyat zinciri | Yapıldı (ürün sayfası, pazar başına en düşük) |
 | Gerçek ürün sayfası linki | Yapıldı |
-| En uygun kaynak skoru, ayarlanabilir ağırlıklar | Kısmen: benzerlik ve fiyat; ağırlık ayarı yok |
+| En uygun kaynak skoru, ayarlanabilir ağırlıklar | Kısmen: "En yakın eşleşme" sıralaması, satılabilirlik skoru (marj, talep, bulunabilirlik, rekabet); ağırlık ayarı yok |
+| Pazarda satılır mı / satan var mı | Yapıldı: sonuç sayfasında analiz kartı (tedarik min, hedef medyan/satıcı sayısı, indirilmiş maliyet, net marj, 0-100 skor) |
+| Filtre paneli | Yapıldı: pazarlar (tedarik/hedef), fiyat üst sınırı, sadece yakın eşleşmeler, sadece görselli; 60'arlık sayfalama |
 
 ## 3.4 Tedarikçi zekâsı
 
 | Madde | Durum |
 |---|---|
 | Tedarikçi kartı | Kısmen: ad, konum, etiketler; yıl, tekrar alım, yanıt süresi için mağaza sayfası okuma yok |
-| Fabrika mı aracı mı | Yapılmadı (Sprint 5) |
+| Fabrika mı aracı mı | Sezgisel skor (etiket, firma adı, MOQ, kademeli fiyat) ürün sayfasında |
 | Üreticiye izleme | Yapılmadı (Sprint 5) |
 | Çapraz mağaza eşleme, risk özeti | Yapılmadı (Sprint 5) |
 
@@ -48,7 +50,7 @@ Güncelleme: 2026-10-03. "Doğrulandı" = kullanıcının tarayıcısında gerç
 |---|---|
 | Ülke profili | 8 ülke, yaklaşık ve tarihli oranlar; kullanıcı düzenlemesi yok |
 | İndirilmiş maliyet, marj | Yapıldı |
-| GTİP önerisi | Yapılmadı |
+| GTİP önerisi | Kategori grubundan HS faslı önerisi (lib/analysis hsSuggest); ürün bazlı değil |
 | Çok ülke karşılaştırma | Yapıldı (ürün sayfası tablosu) |
 | Para birimi | Gösterge kur tablosu; canlı kur yok |
 
@@ -58,17 +60,17 @@ Güncelleme: 2026-10-03. "Doğrulandı" = kullanıcının tarayıcısında gerç
 |---|---|
 | Projeler, geçmiş | Yapıldı |
 | İzleme ve alarm | İzleme yapıldı; otomatik alarm yok (elle yenileme) |
-| Dışa aktarma | CSV yapıldı; XLSX ve PDF yok |
-| İletişim asistanı | Yapılmadı |
+| Dışa aktarma | CSV, Excel (.xls SpreadsheetML) ve yazdır/PDF |
+| İletişim asistanı | Yapıldı: Çince/İngilizce teklif, numune ve özelleştirme taslakları, adet alanlı |
 
 ## 3.7 Eklenti
 
 | Madde | Durum |
 |---|---|
 | Oturum tespiti | Yapıldı (çerez sezgisi + sayfa okuması) |
-| Overlay | Yapılmadı |
+| Overlay | Yapıldı: pazar ürün sayfalarında "Diğer pazarlarda karşılaştır" düğmesi |
 | Sağlık izleme | Yapıldı; ana 4 pazar ve sıralı kalibrasyon turu |
-| Hız sınırı | Yapıldı (pazar başına aralık, sıralı tur) |
+| Hız sınırı | Yapıldı (pazar başına aralık, en çok 3 eşzamanlı sekme) |
 | İnsan benzeri arama | Beta pazarlarda arama kutusuna yazıp Enter; kademeli kaydırma |
 
 ## Pazar kalibrasyonu
@@ -89,3 +91,9 @@ Güncelleme: 2026-10-03. "Doğrulandı" = kullanıcının tarayıcısında gerç
    üreticiye izleme sıralaması, risk özeti.
 3. **Sprint 6, kalite:** 300 ürünlük altın veri seti, güven kalibrasyonu, tarayıcıda CLIP, GTİP önerisi,
    XLSX/PDF dışa aktarma, bölge seçerek arama, toplu CSV arama, overlay.
+
+## Ana sayfa (gerçek veri modu)
+
+Keşfet feed'i cihazdaki gerçek ilanlardan kurulur: marj adayları (tedarik ile hedef pazar benzeri arasında ≥2× fark),
+öne çıkanlar (tazelik, satış, puan, pazar çeşitliliği), kullanıcının kategorileri, çok satanlar, son aramalar ve izlenenler.
+Sunucu yok; algoritma apps/web/src/lib/feed.ts.

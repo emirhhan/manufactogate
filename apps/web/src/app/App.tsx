@@ -4,6 +4,7 @@ import { TopBar } from "@/components/TopBar";
 import { detectExtension } from "@/lib/bridge";
 import { setDataSource } from "@/lib/registry";
 import { useExtension } from "@/store/extension";
+import { Bulk } from "@/pages/Bulk";
 import { Categories } from "@/pages/Categories";
 import { Feed } from "@/pages/Feed";
 import { History } from "@/pages/History";
@@ -53,6 +54,7 @@ export function App() {
         <Route path="/watchlist" element={<Watchlist />} />
         <Route path="/search/:id" element={<Results />} />
         <Route path="/history" element={<History />} />
+        <Route path="/bulk" element={<Bulk />} />
         <Route path="/settings" element={<Settings />} />
       </Routes>
       </div>

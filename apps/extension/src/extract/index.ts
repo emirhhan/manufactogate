@@ -95,6 +95,7 @@ function findSearchBox(): HTMLInputElement | HTMLTextAreaElement | null {
   const sels = [
     "input[type=search]",
     "input[name='q']", "input[name='keywords']", "input[name='keyword']", "input[name='search_key']", "input[name='SearchText']", "input[name='searchkey']", "input[name='k']", "input[name='_nkw']", "input[name='text']", "input[name='search']", "input[name='p']",
+    "input[name='ss']", "#search-input", "#searchInput", "#GlobalNavSearchInput", "#form__search-keyword", "input[aria-label*='Search' i]", "input[aria-label*='ara' i]", "input[aria-label*='looking for' i]", "input[data-testid*='search' i]",
     "input[id*='search' i]", "input[class*='search' i]", "input[placeholder*='搜' i]", "input[placeholder*='ara' i]", "input[placeholder*='search' i]", "input[placeholder*='cari' i]", "input[placeholder*='検索' i]", "input[placeholder*='검색' i]", "input[placeholder*='поиск' i]",
   ];
   for (const sel of sels) {

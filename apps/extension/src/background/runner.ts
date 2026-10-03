@@ -9,6 +9,23 @@ import type { AdapterErrorType, MarketId, SessionState } from "@manufactogate/co
 const lastRun = new Map<MarketId, number>();
 const inflight = new Map<MarketId, Promise<unknown>>();
 
+/** At most this many market tabs are open at the same time; the rest wait in a queue. */
+const MAX_PARALLEL_TABS = 3;
+let activeTabs = 0;
+const waiters: (() => void)[] = [];
+async function acquireSlot(): Promise<void> {
+  if (activeTabs < MAX_PARALLEL_TABS) {
+    activeTabs++;
+    return;
+  }
+  await new Promise<void>((resolve) => waiters.push(resolve));
+  activeTabs++;
+}
+function releaseSlot(): void {
+  activeTabs = Math.max(0, activeTabs - 1);
+  waiters.shift()?.();
+}
+
 function sleep(ms: number) {
   return new Promise((r) => setTimeout(r, ms));
 }
@@ -54,6 +71,7 @@ export async function runExtract(req: ExtractRequest): Promise<ExtractResult | E
   const market = req.market;
   const task = (async () => {
     await rateLimit(market);
+    await acquireSlot();
     const t0 = Date.now();
     const timeoutMs = req.timeoutMs ?? (req.kind === "search" ? 25000 : 15000);
     let tabId: number | undefined;
@@ -183,6 +201,7 @@ export async function runExtract(req: ExtractRequest): Promise<ExtractResult | E
       const msg = e instanceof Error ? e.message : String(e);
       return failure("Network", `${req.kind}: ${msg}`, req.url);
     } finally {
+      releaseSlot();
       if (tabId !== undefined && !keepTab) void chrome.tabs.remove(tabId).catch(() => undefined);
     }
   })();

@@ -4,7 +4,8 @@ import { computeLandedCost, computeMargin, normalizeBadges, type MarketId, type 
 import { BADGE_LABELS_TR } from "@manufactogate/adapters";
 import { getCountryProfile } from "@manufactogate/country-profiles";
 import { ListingActions } from "@/components/ListingActions";
-import { MarketStrip } from "@/components/MarketStrip";
+import { MarketPanel } from "@/components/MarketPanel";
+import { SupplierPanel } from "@/components/SupplierPanel";
 import { ResultCard } from "@/components/ResultCard";
 import { Badge, Button, Card, cn } from "@/components/ui";
 import { MarketImage } from "@/components/MarketImage";
@@ -256,6 +257,12 @@ export function Listing() {
 
       {isSource && (
         <section className="mt-8">
+          <SupplierPanel listing={listing} />
+        </section>
+      )}
+
+      {isSource && (
+        <section className="mt-8">
           <CountryCompare
             tiers={listing.price.tiers}
             currency={listing.price.currency}
@@ -274,7 +281,7 @@ export function Listing() {
             </Link>
           </div>
           <div className="mt-3">
-            <MarketStrip markets={s.markets} notes={s.notes} onRetry={(m) => void s.retryMarket(m)} />
+            <MarketPanel markets={s.markets} notes={s.notes} onRetry={(m) => void s.retryMarket(m)} running={s.running} />
           </div>
           <div className="mt-4 overflow-hidden rounded-lg border border-border bg-surface">
             <table className="w-full text-[13px]">

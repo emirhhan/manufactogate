@@ -25,7 +25,7 @@ export function MarketStrip({ markets, notes = {}, onRetry }: { markets: Record<
           st.state === "done" ? "bg-success" : st.state === "error" ? "bg-danger" : st.state === "running" ? "bg-accent animate-pulse" : "bg-border";
         const label =
           st.state === "pending"
-            ? "bekliyor"
+            ? "sırada"
             : st.state === "running"
               ? `aranıyor · ${st.received}`
               : st.state === "done"
