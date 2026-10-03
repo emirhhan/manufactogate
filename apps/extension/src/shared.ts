@@ -8,4 +8,9 @@ export const MARKET_HOSTS: Record<MarketId, { host: string; loginCookie?: string
   "cn-taobao": { host: "taobao.com", loginCookie: "cookie2" },
   "cn-pinduoduo": { host: "yangkeduo.com", loginCookie: "PDDAccessToken" },
   "tr-trendyol": { host: "trendyol.com" },
+  "cn-alibaba": { host: "alibaba.com" },
+  "cn-aliexpress": { host: "aliexpress.com" },
+  "tr-hepsiburada": { host: "hepsiburada.com" },
+  "tr-n11": { host: "n11.com" },
+  "tr-amazon": { host: "amazon.com.tr" },
 };

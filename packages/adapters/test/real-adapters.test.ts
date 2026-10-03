@@ -41,7 +41,7 @@ async function collect<T>(it: AsyncIterable<T>): Promise<T[]> {
 
 describe("real adapter definitions", () => {
   it("cover all four wave-1 markets with link resolvers", () => {
-    expect(REAL_DEFS.map((d) => d.id).sort()).toEqual(["cn-1688", "cn-pinduoduo", "cn-taobao", "tr-trendyol"]);
+    expect(REAL_DEFS.filter((d) => !d.meta.version.includes("beta")).map((d) => d.id).sort()).toEqual(["cn-1688", "cn-pinduoduo", "cn-taobao", "tr-trendyol"]);
     expect(D("cn-1688").resolveLink("https://detail.1688.com/offer/123.html?spm=x")?.listingId).toBe("123");
     expect(D("cn-taobao").resolveLink("https://item.taobao.com/item.htm?spm=a&id=456")?.listingId).toBe("456");
     expect(D("cn-taobao").resolveLink("https://detail.tmall.com/item.htm?id=789")?.listingId).toBe("789");

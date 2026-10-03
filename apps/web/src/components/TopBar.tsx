@@ -1,10 +1,13 @@
-import { Link, NavLink } from "react-router-dom";
+import { useState } from "react";
+import { Link, NavLink, useNavigate } from "react-router-dom";
 import { useSettings } from "@/store/settings";
 import { cn } from "./ui";
 
 export function TopBar({ extension, dataSource }: { extension: { installed: boolean; version?: string }; dataSource: "mock" | "extension" }) {
   const theme = useSettings((s) => s.theme);
   const setTheme = useSettings((s) => s.setTheme);
+  const nav = useNavigate();
+  const [q, setQ] = useState("");
   const next = theme === "dark" ? "light" : theme === "light" ? "system" : "dark";
   return (
     <header className="sticky top-0 z-20 h-12 border-b border-border bg-surface/90 backdrop-blur">
@@ -13,6 +16,25 @@ export function TopBar({ extension, dataSource }: { extension: { installed: bool
           <span className="inline-block h-4 w-4 rounded-sm bg-accent" aria-hidden />
           Manufactogate
         </Link>
+        <form
+          className="hidden min-w-0 flex-1 items-center md:flex"
+          onSubmit={(e) => {
+            e.preventDefault();
+            const v = q.trim();
+            if (!v) return;
+            nav(`/?q=${encodeURIComponent(v)}`);
+          }}
+        >
+          <div className="relative w-full max-w-[520px]">
+            <input
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+              placeholder="Katalogda ara: ürün, kategori, model…"
+              className="h-9 w-full rounded-full border border-border bg-bg pl-9 pr-3 text-[13px] outline-none placeholder:text-muted focus:border-accent"
+            />
+            <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted">⌕</span>
+          </div>
+        </form>
         <nav className="flex items-center gap-1 text-[13px]">
           {[
             ["/", "Ürünler"],

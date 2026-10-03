@@ -3,12 +3,14 @@ import { BADGES_1688, BADGES_PINDUODUO, BADGES_TAOBAO, BADGES_TRENDYOL } from ".
 import { META_1688, META_PINDUODUO, META_TAOBAO, META_TRENDYOL } from "./markets";
 import { createMockAdapter, type MockOptions } from "./mock/mockAdapter";
 import { AdapterRegistry } from "./registry";
+import { WAVE2_DEFS } from "./wave2";
 
 export * from "./registry";
 export * from "./dom";
 export * from "./runtime";
 export * from "./real";
 export * from "./translate";
+export * from "./wave2";
 export { def1688, extractor1688, LINK_1688 } from "./cn-1688";
 export { defTaobao, extractorTaobao, LINK_TAOBAO } from "./cn-taobao";
 export { defPinduoduo, extractorPinduoduo, LINK_PDD } from "./cn-pinduoduo";
@@ -28,5 +30,6 @@ export function createMockRegistry(opts: Partial<Record<string, MockOptions>> = 
   mk("cn-taobao", META_TAOBAO, BADGES_TAOBAO);
   mk("cn-pinduoduo", META_PINDUODUO, BADGES_PINDUODUO);
   mk("tr-trendyol", META_TRENDYOL, BADGES_TRENDYOL);
+  for (const d of WAVE2_DEFS) r.register(createMockAdapter(d.id, d.meta, d.badgeMap, opts[d.id] ?? { latencyMs: 200 }));
   return r;
 }

@@ -89,8 +89,9 @@ export function Settings() {
 
       <section className="mt-6">
         <h2 className="mb-2 text-[12px] font-medium uppercase tracking-wide text-muted">Pazarlar</h2>
+        <p className="mb-2 text-[12px] text-muted">Beta pazarlar genel kart okuma ile çalışır; bir pazar boş dönerse o pazarın arama sayfasını "Fixture yakala" ile gönder, kalibre edelim.</p>
         <Card className="divide-y divide-border">
-          {reg.all().map((a) => {
+          {[...reg.all()].sort((a, b) => Number(a.meta.version.includes("beta")) - Number(b.meta.version.includes("beta"))).map((a) => {
             const on = s.enabledMarkets.includes(a.id);
             return (
               <label key={a.id} className="flex cursor-pointer items-center gap-3 px-3 py-2.5 text-[13px] hover:bg-surface-2">
@@ -99,7 +100,8 @@ export function Settings() {
                 <span className="text-muted">
                   {a.meta.country.toUpperCase()} · {a.meta.currency} · {a.meta.role === "source" ? "tedarik" : a.meta.role === "target" ? "satış" : "ikisi"}
                 </span>
-                <span className="ml-auto text-[11px] text-muted">
+                <span className="ml-auto flex items-center gap-2 text-[11px] text-muted">
+                  {a.meta.version.includes("beta") && <span className="rounded border border-warning/40 bg-warning/10 px-1 text-warning">beta</span>}
                   {a.meta.capabilities.imageSearch ? "görsel" : ""} {a.meta.capabilities.textSearch ? "metin" : ""} {a.meta.capabilities.linkResolve ? "link" : ""} · v{a.meta.version}
                 </span>
               </label>

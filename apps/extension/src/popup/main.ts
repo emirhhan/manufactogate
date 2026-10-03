@@ -2,12 +2,20 @@ import type { ExtToWeb, WebToExt } from "@manufactogate/adapters";
 import type { HealthResult, MarketId, SessionState } from "@manufactogate/core";
 import { MARKET_HOSTS } from "../shared";
 
-const NAMES: Record<MarketId, string> = { "cn-1688": "1688", "cn-taobao": "Taobao", "cn-pinduoduo": "Pinduoduo", "tr-trendyol": "Trendyol" };
+const NAMES: Record<MarketId, string> = {
+  "cn-1688": "1688", "cn-taobao": "Taobao", "cn-pinduoduo": "Pinduoduo", "tr-trendyol": "Trendyol",
+  "cn-alibaba": "Alibaba.com", "cn-aliexpress": "AliExpress", "tr-hepsiburada": "Hepsiburada", "tr-n11": "n11", "tr-amazon": "Amazon TR",
+};
 const LOGIN: Record<MarketId, string> = {
   "cn-1688": "https://login.1688.com/member/signin.htm",
   "cn-taobao": "https://login.taobao.com/member/login.jhtml",
   "cn-pinduoduo": "https://mobile.yangkeduo.com/login.html",
   "tr-trendyol": "https://www.trendyol.com/",
+  "cn-alibaba": "https://www.alibaba.com/",
+  "cn-aliexpress": "https://www.aliexpress.com/",
+  "tr-hepsiburada": "https://www.hepsiburada.com/",
+  "tr-n11": "https://www.n11.com/",
+  "tr-amazon": "https://www.amazon.com.tr/",
 };
 const LABEL: Record<SessionState, { text: string; cls: string }> = {
   "logged-in": { text: "giriş yapıldı", cls: "ok" },

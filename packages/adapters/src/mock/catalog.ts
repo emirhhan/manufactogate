@@ -158,6 +158,11 @@ export const MARKET_PROFILE: Record<string, { lang: "zh" | "tr" | "en"; currency
   "cn-taobao": { lang: "zh", currency: "CNY", mult: 1.9, moq: 1, tiers: false },
   "cn-pinduoduo": { lang: "zh", currency: "CNY", mult: 1.5, moq: 1, tiers: false },
   "tr-trendyol": { lang: "tr", currency: "TRY", mult: 5 * 3.2, moq: 1, tiers: false },
+  "cn-alibaba": { lang: "en", currency: "USD", mult: 0.16, moq: 100, tiers: true },
+  "cn-aliexpress": { lang: "en", currency: "USD", mult: 0.3, moq: 1, tiers: false },
+  "tr-hepsiburada": { lang: "tr", currency: "TRY", mult: 5 * 3.3, moq: 1, tiers: false },
+  "tr-n11": { lang: "tr", currency: "TRY", mult: 5 * 3.1, moq: 1, tiers: false },
+  "tr-amazon": { lang: "tr", currency: "TRY", mult: 5 * 3.4, moq: 1, tiers: false },
 };
 
 const round = (n: number) => Math.round(n * 100) / 100;

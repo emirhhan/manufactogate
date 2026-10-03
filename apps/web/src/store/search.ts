@@ -10,7 +10,7 @@ import {
 } from "@manufactogate/core";
 import { db, type SearchRecord } from "@/lib/db";
 import { browserFingerprinter } from "@/lib/fingerprinter";
-import { localizeQuery, titleToQuery } from "@manufactogate/adapters";
+import { localizeQuery, queryLadder } from "@manufactogate/adapters";
 import type { Fingerprinter } from "@manufactogate/core";
 import { getRegistry } from "@/lib/registry";
 
@@ -58,16 +58,16 @@ export const useSearch = create<SearchState>((set, get) => ({
 
     const adapters = marketIds.map((m) => getRegistry().get(m)).filter((a): a is NonNullable<typeof a> => !!a);
     if (input.kind === "text") {
-      const perMarket: Partial<Record<MarketId, string>> = {};
+      const perMarket: Partial<Record<MarketId, string[]>> = {};
       for (const a of adapters) {
         const q = localizeQuery(input.query, a.meta.language);
-        if (q !== input.query) perMarket[a.id] = q;
+        if (q !== input.query) perMarket[a.id] = [q, input.query];
       }
       if (Object.keys(perMarket).length) input = { ...input, perMarket };
     }
     if (input.kind === "image" && input.title) {
-      const titles: Partial<Record<MarketId, string>> = {};
-      for (const a of adapters) titles[a.id] = titleToQuery(input.title, a.meta.language);
+      const titles: Partial<Record<MarketId, string[]>> = {};
+      for (const a of adapters) titles[a.id] = queryLadder(input.title, a.meta.language);
       input = { ...input, titles };
     }
     const imageMarkets = new Set(input.kind === "image" ? adapters.filter((a) => a.meta.capabilities.imageSearch).map((a) => a.id) : []);

@@ -1,4 +1,4 @@
-import { localizeQuery, titleToQuery, translateQueryToZh, translateTitleToTr } from "../src";
+import { localizeQuery, queryLadder, titleToQuery, translateQueryToZh, translateTitleToTr } from "../src";
 
 describe("query translation", () => {
   it("maps category names to Chinese", () => {
@@ -23,6 +23,13 @@ describe("title to query", () => {
   });
   it("turns Chinese titles into Turkish queries", () => {
     expect(translateTitleToTr("Arai RX7 摩托车头盔女男机车全盔")).toBe("Arai RX7 Motosiklet Kaskı");
-    expect(titleToQuery("TWS无线蓝牙耳机", "tr")).toBe("TWS kulaklık");
+    expect(titleToQuery("TWS无线蓝牙耳机", "tr")).toBe("TWS Kulaklık");
+  });
+});
+
+describe("query ladder", () => {
+  it("goes from specific to category only", () => {
+    expect(queryLadder("国产Arai Rx7x 红芳贺纪行摩托车机车安全头盔男女骑士四季通用", "zh")).toEqual(["Arai Rx7x 头盔", "Arai 头盔", "头盔"]);
+    expect(queryLadder("国产Arai Rx7x 摩托车头盔", "tr")).toEqual(["Arai Rx7x Motosiklet Kaskı", "Arai Motosiklet Kaskı", "Motosiklet Kaskı"]);
   });
 });

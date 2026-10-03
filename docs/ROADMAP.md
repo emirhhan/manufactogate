@@ -30,6 +30,8 @@
 | 2 | Ana sayfa araması, gerçek ürün sayfası, pazarlar arası karşılaştırma, görsel arama tabanı | Tamam; görselle arama canlı doğrulama bekliyor |
 | 3 | Projeler, notlar, izleme listesi, CSV dışa aktarma, maliyet varsayımları | Tamam |
 | 4 | Sorgu yerelleştirme (Türkçe → Çince sözlük), görsel arama başarısızlığında başlıkla arama | Tamam |
+| 4b | Beta pazarlar: Alibaba.com, AliExpress, Hepsiburada, n11, Amazon TR (genel kart okuma; fixture ile kalibre edilecek) | Tamam, beta |
+| 4c | Karşılaştırma kalitesi: sorgu merdiveni, benzerlik filtresi, sayfalama, görsel yedek, captcha sonrası otomatik devam | Tamam |
 | 5 | Tedarikçi zekâsı: fabrika mı aracı mı skoru, üreticiye izleme sıralaması, risk özeti | Sırada |
 | 6 | Kalite: altın veri seti, kalibrasyon, CLIP ile görsel doğrulama, ülke profili düzenleme, LLM çeviri (isteğe bağlı anahtar) | Sırada |
 

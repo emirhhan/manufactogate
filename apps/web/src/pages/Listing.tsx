@@ -65,7 +65,7 @@ export function Listing() {
 
   const compare = async () => {
     if (!listing || !market) return;
-    const markets = enabled.includes(market) ? enabled : [...enabled, market];
+    const markets = [...new Set([...reg.all().map((a) => a.id), ...enabled, market])];
     const first = listing.images[0];
     const dataUrl = first ? await imageToDataUrl(first) : null;
     const input = dataUrl

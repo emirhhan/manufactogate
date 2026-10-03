@@ -33,7 +33,13 @@
     "*://*.yangkeduo.com/*",
     "*://*.trendyol.com/*",
     "http://localhost:5173/*",
-    "http://127.0.0.1:5173/*"
+    "http://127.0.0.1:5173/*",
+    "*://*.alibaba.com/*",
+    "*://*.aliexpress.com/*",
+    "*://*.aliexpress.us/*",
+    "*://*.hepsiburada.com/*",
+    "*://*.n11.com/*",
+    "*://*.amazon.com.tr/*"
   ],
   "content_scripts": [
     {

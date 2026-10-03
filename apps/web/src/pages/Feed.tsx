@@ -65,10 +65,13 @@ export function Feed() {
     <div className="mx-auto max-w-[1440px] px-4 py-5">
       {/* Hero search: image, link or text across the enabled markets */}
       {!groupKey && !q && (
-        <div className="mb-5 rounded-xl border border-border bg-surface-2/60 p-5">
-          <h1 className="text-xl font-semibold tracking-tight">Ürünü bul, kaynağına in, maliyetini gör.</h1>
-          <p className="mt-1 text-muted">Bir görsel, bir ürün linki ya da ürün adı. Seçili pazarlarda aynı ürün aranır, fiyatlar ve tedarikçiler yan yana gelir.</p>
-          <div className="mt-4">
+        <div className="mb-5 overflow-hidden rounded-2xl border border-border bg-[linear-gradient(135deg,var(--surface)_0%,var(--surface-2)_100%)] p-6 sm:p-8">
+          <div className="max-w-[760px]">
+            <div className="text-[11px] font-medium uppercase tracking-[0.14em] text-accent">Çok pazarlı tedarik araştırması</div>
+            <h1 className="mt-2 text-2xl font-semibold tracking-tight sm:text-3xl">Ürünü bul, kaynağına in, maliyetini gör.</h1>
+            <p className="mt-2 text-muted">Bir görsel, bir ürün linki ya da ürün adı. 1688, Taobao, Pinduoduo ve Trendyol'da aynı ürün aranır; fiyatlar, tedarikçiler ve Türkiye'ye indirilmiş maliyet yan yana gelir.</p>
+          </div>
+          <div className="mt-5">
             <SearchBox
               busy={running}
               onSubmit={async (input, thumb) => {
@@ -76,6 +79,11 @@ export function Feed() {
                 nav(`/search/${id}`);
               }}
             />
+          </div>
+          <div className="mt-3 flex flex-wrap gap-x-5 gap-y-1 text-[12px] text-muted">
+            <span>● Kendi oturumunla, sunucusuz</span>
+            <span>● 430 kategori, 4 pazar, 5 beta pazar</span>
+            <span>● Görselle arama: 1688, Taobao, Trendyol</span>
           </div>
         </div>
       )}

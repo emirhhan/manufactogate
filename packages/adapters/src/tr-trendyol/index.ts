@@ -15,6 +15,9 @@ export const LINK_TRENDYOL = /(?:trendyol\.com)?\/[^?#]*-p-(\d+)(?:[?#]|$)/;
 const BADGE_WORDS = Object.keys(BADGES_TRENDYOL);
 
 export const extractorTrendyol: PageExtractor = {
+  imageInput(doc) {
+    return doc.querySelector<HTMLInputElement>("input[type=file][accept*='image'], input[type=file]");
+  },
   session(doc) {
     return detectSession(doc, {
       loginHosts: /\/giris|\/login/,
@@ -97,7 +100,8 @@ export const extractorTrendyol: PageExtractor = {
 
 export const defTrendyol: RealMarketDef = {
   id: "tr-trendyol",
-  meta: { ...META_TRENDYOL, version: "0.1.0" },
+  meta: { ...META_TRENDYOL, version: "0.2.0", capabilities: { ...META_TRENDYOL.capabilities, imageSearch: true } },
+  imageSearchUrl: () => ({ url: "https://www.trendyol.com/", upload: true }),
   badgeMap: BADGES_TRENDYOL,
   healthQuery: "bluetooth kulaklık",
   searchUrl: (q, page = 1) => `https://www.trendyol.com/sr?q=${encodeURIComponent(q)}${page > 1 ? `&pi=${page}` : ""}`,

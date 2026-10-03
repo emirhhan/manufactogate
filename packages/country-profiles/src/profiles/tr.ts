@@ -34,5 +34,5 @@ export const TR: CountryProfile = {
     { key: "rail", label: "Demiryolu", mode: "rail", perKg: 120, minCharge: 6000, transitDays: [20, 30] },
     { key: "sea", label: "Deniz yolu (LCL)", mode: "sea", perKg: 70, minCharge: 9000, transitDays: [30, 45] },
   ],
-  commissions: { "tr-trendyol": 0.18, "tr-hepsiburada": 0.17, "tr-n11": 0.15 },
+  commissions: { "tr-trendyol": 0.18, "tr-hepsiburada": 0.17, "tr-n11": 0.15, "tr-amazon": 0.15 },
 };

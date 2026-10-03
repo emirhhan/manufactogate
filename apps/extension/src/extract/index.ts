@@ -43,7 +43,7 @@ function dataUrlToFile(dataUrl: string, name = "query.jpg"): File {
 
 function findTrigger(): HTMLElement | null {
   const bySelector = document.querySelector<HTMLElement>(
-    "[class*='camera'], [class*='Camera'], [class*='imgsearch'], [class*='imageSearch'], [class*='image-search'], [class*='ImageSearch'], [class*='picSearch'], [class*='photo'], [title*='图'], [aria-label*='图'], [data-spm*='img'], [class*='upload']",
+    "[class*='camera'], [class*='Camera'], [class*='imgsearch'], [class*='imageSearch'], [class*='image-search'], [class*='ImageSearch'], [class*='picSearch'], [class*='photo'], [class*='visual'], [class*='Visual'], [data-testid*='visual'], [data-testid*='camera'], [title*='图'], [aria-label*='图'], [aria-label*='örsel'], [title*='örsel'], [data-spm*='img'], [class*='upload']",
   );
   if (bySelector) return bySelector;
   for (const el of document.querySelectorAll<HTMLElement>("button, a, span, div, label")) {

@@ -24,12 +24,13 @@ export function parsePrice(text: string | null | undefined): number | null {
 export function parseCount(text: string | null | undefined): number | null {
   if (!text) return null;
   const t = text.replace(/\s+/g, "");
-  const m = /(\d+(?:[.,]\d+)?)(万|K|k|B|M)?/.exec(t);
+  const m = /(\d{1,3}(?:[.,]\d{3})+|\d+(?:[.,]\d+)?)(万|K|k|B|M)?/.exec(t);
   if (!m) return null;
-  let n = Number(m[1]!.replace(",", "."));
+  const raw = m[1]!;
+  // "1,200" / "2.345" are thousands groups; "1.2" / "4,5" are decimals.
+  const grouped = /^\d{1,3}([.,]\d{3})+$/.test(raw);
+  let n = grouped ? Number(raw.replace(/[.,]/g, "")) : Number(raw.replace(",", "."));
   if (!Number.isFinite(n)) return null;
-  // Turkish thousands "2.345" without unit and 3 digits after the dot
-  if (/^\d{1,3}\.\d{3}$/.test(m[1]!) && !m[2]) n = Number(m[1]!.replace(".", ""));
   const unit = m[2];
   if (unit === "万") n *= 10000;
   else if (unit === "K" || unit === "k" || unit === "B") n *= 1000;

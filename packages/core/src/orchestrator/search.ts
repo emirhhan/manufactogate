@@ -11,8 +11,8 @@ import {
 } from "../model";
 
 export type SearchInput =
-  | { kind: "image"; image: ImageInput; title?: string; titles?: Partial<Record<MarketId, string>> }
-  | { kind: "text"; query: string; perMarket?: Partial<Record<MarketId, string>> }
+  | { kind: "image"; image: ImageInput; title?: string; titles?: Partial<Record<MarketId, string | string[]>> }
+  | { kind: "text"; query: string; perMarket?: Partial<Record<MarketId, string | string[]>> }
   | { kind: "link"; url: string };
 
 export type MarketStatus =
@@ -81,8 +81,21 @@ export async function* runSearch(
       const so: SearchOptions = {};
       if (opts.maxPerMarket !== undefined) so.maxResults = opts.maxPerMarket;
       if (opts.signal) so.signal = opts.signal;
-      const textQuery =
-        input.kind === "text" ? (input.perMarket?.[adapter.id] ?? input.query) : input.kind === "image" ? (input.titles?.[adapter.id] ?? input.title) : undefined;
+      const raw = input.kind === "text" ? (input.perMarket?.[adapter.id] ?? input.query) : input.kind === "image" ? (input.titles?.[adapter.id] ?? input.title) : undefined;
+      const ladder = (Array.isArray(raw) ? raw : raw ? [raw] : []).filter(Boolean);
+      const textQuery = ladder[0];
+      /** Text search that walks the query ladder until a market returns something. */
+      const textSearch = async function* (): AsyncIterable<RawListing> {
+        for (let i = 0; i < ladder.length; i++) {
+          let got = 0;
+          for await (const l of adapter.searchByText(ladder[i]!, so)) {
+            got++;
+            yield l;
+          }
+          if (got > 0) return;
+          if (i + 1 < ladder.length) emit({ type: "note", market: adapter.id, note: `"${ladder[i]}" sonuç vermedi, "${ladder[i + 1]}" ile arandı` });
+        }
+      };
       const canImage = input.kind === "image" && adapter.meta.capabilities.imageSearch;
       if (input.kind === "image" && !canImage && !textQuery) {
         emit({ type: "market", market: adapter.id, status: { state: "done", received: 0, durationMs: Date.now() - t0 } });
@@ -107,7 +120,7 @@ export async function* runSearch(
             const e = err as AdapterError;
             if (e instanceof AdapterError && (e.type === "LoggedOut" || e.type === "Captcha")) throw err;
             emit({ type: "note", market: adapter.id, note: `görselle arama başarısız (${e instanceof Error ? e.message : String(e)}), başlıkla arandı` });
-            for await (const l of adapter.searchByText(textQuery, so)) yield l;
+            for await (const l of textSearch()) yield l;
           }
         })();
       }

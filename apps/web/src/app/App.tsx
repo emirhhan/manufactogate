@@ -40,6 +40,7 @@ export function App() {
   return (
     <BrowserRouter>
       <TopBar extension={ext} dataSource={effective} />
+      <div className="min-h-[calc(100vh-48px)]">
       <Routes>
         <Route path="/" element={<Feed />} />
         <Route path="/c/:group" element={<Feed />} />
@@ -54,6 +55,14 @@ export function App() {
         <Route path="/history" element={<History />} />
         <Route path="/settings" element={<Settings />} />
       </Routes>
+      </div>
+      <footer className="mt-10 border-t border-border py-6 text-[12px] text-muted">
+        <div className="mx-auto flex max-w-[1440px] flex-wrap items-center gap-x-6 gap-y-2 px-4">
+          <span className="font-medium text-text">Manufactogate</span>
+          <span>Veriler bu cihazda kalır. Pazarlara kendi hesabınla bağlanırsın.</span>
+          <span className="ml-auto">Fiyatlar pazarların kendi para biriminde, ≈ TRY gösterge kurla.</span>
+        </div>
+      </footer>
     </BrowserRouter>
   );
 }
