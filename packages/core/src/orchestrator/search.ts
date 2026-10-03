@@ -32,6 +32,7 @@ export type NoteCode =
   | "image-empty"
   | "ladder-next"
   | "no-image-search"
+  | "image-title"
   | "rung-skipped"
   | "untranslated"
   | "link-degraded"
@@ -281,6 +282,9 @@ export async function* runSearch(
 
   // ---- Fingerprint pool -------------------------------------------------------------
   let clusterer: IncrementalClusterer | null = null;
+  let derivedTitle: Promise<string | undefined> | undefined;
+  let resolveDerived: ((t: string | undefined) => void) | undefined;
+  let imageDone: (() => void) | undefined;
   let candidateCount = 0;
   const poolQueue: (() => Promise<void>)[] = [];
   let poolActive = 0;
@@ -527,6 +531,7 @@ export async function* runSearch(
             emit({ type: "listing", market: adapter.id, listing: l });
             status(false);
             addCandidate(l, ph === "image");
+            if (ph === "image" && l.title.trim()) resolveDerived?.(l.title);
           }
           return received >= maxPerMarket;
         };
@@ -571,6 +576,13 @@ export async function* runSearch(
               await textLadder();
             }
           } else {
+            if (!ladder.length && derivedTitle && opts.ladder) {
+              const t = await derivedTitle;
+              if (t && !aborted()) {
+                ladder = opts.ladder(t, adapter).map((r) => r.trim()).filter(Boolean);
+                if (ladder.length) emit({ type: "note", market: adapter.id, code: "image-title", note: `görselle bulunan ürünün başlığıyla arandı: "${ladder[0]}"` });
+              }
+            }
             if (!ladder.length) {
               emit({ type: "note", market: adapter.id, code: "no-image-search", note: "bu pazarda görselle arama yok ve başlık bilinmiyor" });
               finishDone();
@@ -594,6 +606,20 @@ export async function* runSearch(
       }
     };
 
+    // Photo-only search: markets without image search borrow the title of the first listing an
+    // image-search market finds. They wait outside a concurrency slot so image markets can run.
+    const imageMarkets = effective.kind === "image" ? toRun.filter((a) => a.meta.capabilities.imageSearch) : [];
+    const waitsForTitle = (a: MarketAdapter) =>
+      effective.kind === "image" && !!opts.ladder && imageMarkets.length > 0 && !imageMarkets.includes(a) && ladderFor(effective, a).length === 0;
+    if (toRun.some(waitsForTitle)) {
+      derivedTitle = new Promise<string | undefined>((r) => (resolveDerived = r));
+      let left = imageMarkets.length;
+      imageDone = () => {
+        if (--left === 0) resolveDerived?.(undefined);
+      };
+      signal?.addEventListener("abort", () => resolveDerived?.(undefined), { once: true });
+    }
+
     // Concurrency + priority.
     const ordered = toRun
       .map((a, i) => ({ a, i, p: opts.priority?.(a) ?? 0 }))
@@ -614,6 +640,7 @@ export async function* runSearch(
       else active--;
     };
     const tasks = ordered.map(async (adapter) => {
+      if (derivedTitle && waitsForTitle(adapter)) await derivedTitle;
       await acquire();
       try {
         if (aborted()) {
@@ -622,6 +649,7 @@ export async function* runSearch(
         }
         await runMarket(adapter);
       } finally {
+        if (imageMarkets.includes(adapter)) imageDone?.();
         release();
       }
     });

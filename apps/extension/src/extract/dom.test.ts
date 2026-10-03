@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { activitySignature, captchaVisible, findFileInput, findImageTrigger, findSearchBox, findSubmitFor, isVisible, supportsPaste } from "./dom";
+import { activitySignature, captchaVisible, findFileInput, findImageConfirm, findImageTrigger, findSearchBox, findSubmitFor, isVisible, supportsPaste } from "./dom";
 
 beforeEach(() => {
   document.body.innerHTML = "";
@@ -88,5 +88,14 @@ describe("visibility and activity", () => {
     const a = activitySignature(document);
     document.body.appendChild(document.createElement("div"));
     expect(activitySignature(document)).not.toBe(a);
+  });
+
+  it("finds the search button of an image preview panel, not the plain search-bar button", () => {
+    document.body.innerHTML = `
+      <div class="search-bar"><input name="q"><button class="btn-search">搜索</button></div>
+      <div class="image-search-panel"><img src="x"><div class="pic-btn">搜索</div></div>`;
+    expect(findImageConfirm(document)?.className).toBe("pic-btn");
+    document.body.innerHTML = `<div class="search-bar"><button>搜索</button></div>`;
+    expect(findImageConfirm(document)).toBeNull();
   });
 });

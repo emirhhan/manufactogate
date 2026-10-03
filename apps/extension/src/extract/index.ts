@@ -7,7 +7,7 @@
  */
 import { PAGE_EXTRACTORS } from "@manufactogate/adapters";
 import type { MarketId, SessionState } from "@manufactogate/core";
-import { activitySignature, captchaVisible as captchaVisibleIn, findFileInput, findImageTrigger, findSearchBox, findSubmitFor, isVisible, supportsPaste } from "./dom";
+import { activitySignature, captchaVisible as captchaVisibleIn, findFileInput, findImageConfirm, findImageTrigger, findSearchBox, findSubmitFor, isVisible, supportsPaste } from "./dom";
 
 type Kind = "search" | "detail" | "supplier" | "health";
 
@@ -173,7 +173,21 @@ async function setImage(market: MarketId, dataUrl: string): Promise<ImageOutcome
     } catch {
       return "no-input";
     }
-    return (await reacted(3500)) ? "ok" : "no-reaction";
+    const href = location.href;
+    const changed = await reacted(3500);
+    if (location.href !== href) return "ok";
+    // Upload showed a preview but did not navigate: press the panel's own search button.
+    const until = Date.now() + 4000;
+    let btn = findImageConfirm(document);
+    while (!btn && Date.now() < until) {
+      await sleep(300);
+      btn = findImageConfirm(document);
+    }
+    if (btn) {
+      btn.click();
+      return (await reacted(3500)) || changed ? "ok" : "no-reaction";
+    }
+    return changed ? "ok" : "no-reaction";
   }
   // Paste fallback: only where the page says so (Taobao/1688 "Ctrl+V 粘贴图片").
   const box = findSearchBox(document);

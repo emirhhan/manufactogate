@@ -209,3 +209,23 @@ export function supportsPaste(doc: Document, box: Element | null): boolean {
   const d = box ? [box.getAttribute("placeholder"), box.getAttribute("title"), box.parentElement?.textContent?.slice(0, 200)].join(" ") : "";
   return /粘贴|Ctrl\s*\+\s*V|yapıştır/i.test(d);
 }
+
+const CONFIRM_TEXT = /^(搜索|搜同款|搜图|搜索图片|找同款|查找|识别|确定|开始搜索|search|ara|görselle ara)$/i;
+
+/**
+ * After an image upload some sites (Taobao) show a preview with a confirm button instead of
+ * navigating. Finds that button: a visible clickable element whose own label is a search word,
+ * preferring one inside an image/upload panel over the plain search-bar button.
+ */
+export function findImageConfirm(doc: Document): HTMLElement | null {
+  const els = [...doc.querySelectorAll<HTMLElement>("button, a, [role=button], div, span, input[type=submit], input[type=button]")];
+  const hits = els.filter((el) => {
+    const label = (el instanceof HTMLInputElement ? el.value : el.textContent ?? "").replace(/\s+/g, " ").trim();
+    if (!CONFIRM_TEXT.test(label)) return false;
+    return el.children.length <= 2 && isVisible(el);
+  });
+  const inPanel = (el: Element) => !!el.closest("[class*='image' i], [class*='img' i], [class*='upload' i], [class*='pic' i], [class*='photo' i], [class*='camera' i], [class*='dialog' i], [class*='modal' i], [class*='popup' i]");
+  // Innermost match: a wrapper whose only text is the button's label is not the button.
+  const leaves = hits.filter((el) => !hits.some((o) => o !== el && el.contains(o)));
+  return leaves.find(inPanel) ?? null;
+}

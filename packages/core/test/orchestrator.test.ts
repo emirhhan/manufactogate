@@ -165,6 +165,15 @@ describe("runSearch", () => {
     expect(notes(events, "cn-b")[0]!.note).toContain("çalışmıyor");
   });
 
+  it("(c4) a photo-only search gives markets without image search the image result's title", async () => {
+    const img = fakeAdapter({ id: "cn-b", imageSearch: true, imageResults: [mk("cn-b", "9", "保温杯")] });
+    const tr = fakeAdapter({ id: "tr-a", language: "tr", results: { 保温杯: [mk("tr-a", "1", "termos")] } });
+    const events = await collect(runSearch({ kind: "image", image: { dataUrl: "data:," } }, [tr, img], fp, { ...quick, ladder: (t) => [t] }));
+    expect(tr.calls).toEqual(["text:保温杯"]);
+    expect(notes(events, "tr-a")[0]).toMatchObject({ code: "image-title" });
+    expect(statuses(events, "tr-a").at(-1)).toMatchObject({ state: "done", received: 1 });
+  });
+
   it("(c3) a remembered image failure does not block a photo-only search", async () => {
     const memo = fakeAdapter({ id: "cn-b", imageSearch: true, imageResults: [mk("cn-b", "9", "img")] });
     const events = await collect(runSearch({ kind: "image", image: { dataUrl: "data:," } }, [memo], fp, { ...quick, capabilityOverrides: { "cn-b": { imageSearch: false } } }));
