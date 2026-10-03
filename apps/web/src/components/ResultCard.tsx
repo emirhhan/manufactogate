@@ -2,7 +2,7 @@ import { normalizeBadges, type RawListing } from "@manufactogate/core";
 import { BADGE_LABELS_TR } from "@manufactogate/adapters";
 import { MarketImage } from "./MarketImage";
 import { money } from "@/lib/format";
-import { toTry } from "@/lib/fx";
+import { getDisplayCurrency, toDisplay } from "@/lib/fx";
 import { getRegistry } from "@/lib/registry";
 import { Link } from "react-router-dom";
 import { Badge, cn } from "./ui";
@@ -19,7 +19,8 @@ export function ResultCard({ listing, confidence, highlight = false }: { listing
   const adapter = reg.get(listing.market);
   const badges = adapter ? normalizeBadges(adapter, listing.badges) : [];
   const min = Math.min(...listing.price.tiers.map((t) => t.unitPrice));
-  const tryPrice = listing.price.currency === "TRY" ? null : toTry(min, listing.price.currency);
+  const disp = getDisplayCurrency();
+  const tryPrice = listing.price.currency === disp ? null : toDisplay(min, listing.price.currency);
   return (
     <Link
       to={`/l/${listing.market}/${listing.id}`}
@@ -44,7 +45,7 @@ export function ResultCard({ listing, confidence, highlight = false }: { listing
         <div className="mt-auto flex items-end justify-between gap-2">
           <div>
             <div className="text-[15px] font-semibold tnum">{money(min, listing.price.currency)}</div>
-            {tryPrice !== null && <div className="text-[11px] text-muted tnum">≈ {money(tryPrice, "TRY")}</div>}
+            {tryPrice !== null && <div className="text-[11px] text-muted tnum">≈ {money(tryPrice, disp)}</div>}
           </div>
           <div className="text-right text-[11px] text-muted tnum">
             {listing.moq && listing.moq > 1 ? <div>MOQ {listing.moq}</div> : null}

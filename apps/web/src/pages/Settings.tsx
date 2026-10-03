@@ -1,4 +1,5 @@
-import { COUNTRY_PROFILES } from "@manufactogate/country-profiles";
+import { COUNTRY_NAMES_TR, COUNTRY_PROFILES } from "@manufactogate/country-profiles";
+import { DISPLAY_CURRENCIES } from "@/lib/fx";
 import { Button, Card, cn } from "@/components/ui";
 import { sendToExtension } from "@/lib/bridge";
 import { getRegistry } from "@/lib/registry";
@@ -120,7 +121,15 @@ export function Settings() {
               className={cn("rounded-md border px-3 py-1.5 text-[13px]", s.targetCountry === p.country ? "border-accent bg-accent/10 text-accent" : "border-border hover:bg-surface-2")}
               title={`Oranlar ${p.asOf} tarihli`}
             >
-              {p.country.toUpperCase()} · {p.currency}
+              {COUNTRY_NAMES_TR[p.country] ?? p.country.toUpperCase()} · {p.currency}
+            </button>
+          ))}
+        </div>
+        <div className="mt-3 flex items-center gap-2 text-[13px]">
+          <span className="text-muted">Gösterge para birimi</span>
+          {DISPLAY_CURRENCIES.map((c) => (
+            <button key={c} onClick={() => s.setDisplayCurrency(c)} className={cn("rounded-md border px-2.5 py-1", s.displayCurrency === c ? "border-accent bg-accent/10 text-accent" : "border-border hover:bg-surface-2")}>
+              {c}
             </button>
           ))}
         </div>

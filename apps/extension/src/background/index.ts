@@ -24,7 +24,7 @@ async function sessionFor(market: MarketId): Promise<SessionState> {
 
 async function allSessions(): Promise<Partial<Record<MarketId, SessionState>>> {
   const out: Partial<Record<MarketId, SessionState>> = {};
-  await Promise.all((Object.keys(MARKET_HOSTS) as MarketId[]).map(async (m) => (out[m] = await sessionFor(m))));
+  await Promise.all((Object.keys(REAL_DEF_BY_ID) as MarketId[]).map(async (m) => (out[m] = await sessionFor(m))));
   return out;
 }
 

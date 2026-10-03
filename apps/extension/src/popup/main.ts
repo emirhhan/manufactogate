@@ -1,22 +1,10 @@
 import type { ExtToWeb, WebToExt } from "@manufactogate/adapters";
 import type { HealthResult, MarketId, SessionState } from "@manufactogate/core";
+import { REAL_DEF_BY_ID, REAL_DEFS } from "@manufactogate/adapters";
 import { MARKET_HOSTS } from "../shared";
+const NAMES = Object.fromEntries(REAL_DEFS.map((d) => [d.id, d.meta.name])) as Record<MarketId, string>;
+const LOGIN = Object.fromEntries(REAL_DEFS.map((d) => [d.id, d.meta.loginUrl ?? `https://${d.meta.hosts[0]?.replace("*.", "www.") ?? ""}/`])) as Record<MarketId, string>;
 
-const NAMES: Record<MarketId, string> = {
-  "cn-1688": "1688", "cn-taobao": "Taobao", "cn-pinduoduo": "Pinduoduo", "tr-trendyol": "Trendyol",
-  "cn-alibaba": "Alibaba.com", "cn-aliexpress": "AliExpress", "tr-hepsiburada": "Hepsiburada", "tr-n11": "n11", "tr-amazon": "Amazon TR",
-};
-const LOGIN: Record<MarketId, string> = {
-  "cn-1688": "https://login.1688.com/member/signin.htm",
-  "cn-taobao": "https://login.taobao.com/member/login.jhtml",
-  "cn-pinduoduo": "https://mobile.yangkeduo.com/login.html",
-  "tr-trendyol": "https://www.trendyol.com/",
-  "cn-alibaba": "https://www.alibaba.com/",
-  "cn-aliexpress": "https://www.aliexpress.com/",
-  "tr-hepsiburada": "https://www.hepsiburada.com/",
-  "tr-n11": "https://www.n11.com/",
-  "tr-amazon": "https://www.amazon.com.tr/",
-};
 const LABEL: Record<SessionState, { text: string; cls: string }> = {
   "logged-in": { text: "giriş yapıldı", cls: "ok" },
   "logged-out": { text: "giriş yok", cls: "warn" },
@@ -32,13 +20,14 @@ const $ = (id: string) => document.getElementById(id)!;
 function renderMarkets(sessions: Partial<Record<MarketId, SessionState>>, health: Partial<Record<MarketId, HealthResult>>) {
   const ul = $("markets");
   ul.innerHTML = "";
-  for (const id of Object.keys(MARKET_HOSTS) as MarketId[]) {
+  for (const id of REAL_DEFS.map((d) => d.id)) {
     const st = LABEL[sessions[id] ?? "unknown"];
     const h = health[id];
     const li = document.createElement("li");
     li.className = h ? (h.ok ? "ok" : "bad") : st.cls;
     const detail = h ? `${h.message ?? ""}` : st.text;
-    li.innerHTML = `<i class="dot"></i><b>${NAMES[id]}</b><span title="${detail}">${detail}</span><a href="${sessions[id] === "logged-out" ? LOGIN[id] : `https://${MARKET_HOSTS[id]!.host}`}" target="_blank" rel="noreferrer">${sessions[id] === "logged-out" ? "giriş yap" : "aç"} ↗</a>`;
+    const home = MARKET_HOSTS[id]?.host ?? REAL_DEF_BY_ID[id]?.meta.hosts[0]?.replace("*.", "www.") ?? "";
+    li.innerHTML = `<i class="dot"></i><b>${NAMES[id]}</b><span title="${detail}">${detail}</span><a href="${sessions[id] === "logged-out" ? LOGIN[id] : `https://${home}`}" target="_blank" rel="noreferrer">${sessions[id] === "logged-out" ? "giriş yap" : "aç"} ↗</a>`;
     ul.appendChild(li);
   }
 }

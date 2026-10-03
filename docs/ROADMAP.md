@@ -32,6 +32,8 @@
 | 4 | Sorgu yerelleştirme (Türkçe → Çince sözlük), görsel arama başarısızlığında başlıkla arama | Tamam |
 | 4b | Beta pazarlar: Alibaba.com, AliExpress, Hepsiburada, n11, Amazon TR (genel kart okuma; fixture ile kalibre edilecek) | Tamam, beta |
 | 4c | Karşılaştırma kalitesi: sorgu merdiveni, benzerlik filtresi, sayfalama, görsel yedek, captcha sonrası otomatik devam | Tamam |
+| 4d | Dalga 3 beta pazarlar: DHgate, Made-in-China, Global Sources, Yiwugo, IndiaMART, TradeIndia, Tokopedia, Shopee ID, Lazada TH, Rakuten, Mercari, Yahoo Auctions, Coupang, Gmarket, Amazon DE/US/UK, eBay, Walmart, Temu, Noon, Ozon, Wildberries | Tamam, beta (fixture ile kalibre edilecek) |
+| 4e | Ülke profilleri TR, DE, US, GB, AE, NL, PL, RO; gösterge para birimi; ülke başına maliyet ve marj tablosu ("hangi ülkeye satmak kârlı") | Tamam |
 | 5 | Tedarikçi zekâsı: fabrika mı aracı mı skoru, üreticiye izleme sıralaması, risk özeti | Sırada |
 | 6 | Kalite: altın veri seti, kalibrasyon, CLIP ile görsel doğrulama, ülke profili düzenleme, LLM çeviri (isteğe bağlı anahtar) | Sırada |
 

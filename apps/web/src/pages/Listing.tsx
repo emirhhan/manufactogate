@@ -8,6 +8,7 @@ import { MarketStrip } from "@/components/MarketStrip";
 import { ResultCard } from "@/components/ResultCard";
 import { Badge, Button, Card, cn } from "@/components/ui";
 import { MarketImage } from "@/components/MarketImage";
+import { CountryCompare } from "@/components/CountryCompare";
 import { relevance } from "@/lib/relevance";
 import { db } from "@/lib/db";
 import { money, pct } from "@/lib/format";
@@ -250,6 +251,17 @@ export function Listing() {
           )}
         </div>
       </div>
+
+      {isSource && (
+        <section className="mt-8">
+          <CountryCompare
+            tiers={listing.price.tiers}
+            currency={listing.price.currency}
+            weightKg={costSettings.defaultWeightKg}
+            found={Object.fromEntries(others.map((o) => [o.market, o.best]))}
+          />
+        </section>
+      )}
 
       {comparing && (
         <section className="mt-8">

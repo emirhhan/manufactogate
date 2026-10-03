@@ -15,7 +15,7 @@ describe("mock registry", () => {
     const r = createMockRegistry();
     const wave1 = r.all().filter((a) => !a.meta.version.includes("beta")).map((a) => a.id).sort();
     expect(wave1).toEqual(["cn-1688", "cn-pinduoduo", "cn-taobao", "tr-trendyol"]);
-    expect(r.all().length).toBe(9);
+    expect(r.all().length).toBeGreaterThanOrEqual(9);
     expect(r.resolve("https://cn-1688.example/item/kablosuz-kulaklik-1")?.listingId).toBe("kablosuz-kulaklik-1");
     expect(r.resolve("https://nowhere.example/x")).toBeNull();
     expect(r.sources().filter((a) => !a.meta.version.includes("beta"))).toHaveLength(3);

@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import type { MarketId } from "@manufactogate/core";
 import { getSetting, setSetting } from "@/lib/db";
+import { setDisplayCurrency, type DisplayCurrency } from "@/lib/fx";
 
 export type Theme = "system" | "light" | "dark";
 export type DataSourcePref = "auto" | "mock" | "extension";
@@ -18,6 +19,7 @@ interface SettingsState {
   targetCountry: string;
   dataSource: DataSourcePref;
   cost: CostSettings;
+  displayCurrency: DisplayCurrency;
   hydrated: boolean;
   hydrate(): Promise<void>;
   setTheme(t: Theme): void;
@@ -25,6 +27,7 @@ interface SettingsState {
   setTargetCountry(c: string): void;
   setDataSource(d: DataSourcePref): void;
   setCost(c: Partial<CostSettings>): void;
+  setDisplayCurrency(c: DisplayCurrency): void;
 }
 
 const DEFAULT_MARKETS: MarketId[] = ["cn-1688", "cn-taobao", "cn-pinduoduo"];
@@ -41,6 +44,7 @@ export const useSettings = create<SettingsState>((set, get) => ({
   targetCountry: "tr",
   dataSource: "auto",
   cost: DEFAULT_COST,
+  displayCurrency: "TRY",
   hydrated: false,
   async hydrate() {
     const theme = await getSetting<Theme>("theme", "system");
@@ -48,8 +52,10 @@ export const useSettings = create<SettingsState>((set, get) => ({
     const targetCountry = await getSetting<string>("targetCountry", "tr");
     const dataSource = await getSetting<DataSourcePref>("dataSource", "auto");
     const cost = { ...DEFAULT_COST, ...(await getSetting<Partial<CostSettings>>("cost", {})) };
+    const displayCurrency = await getSetting<DisplayCurrency>("displayCurrency", "TRY");
+    setDisplayCurrency(displayCurrency);
     applyTheme(theme);
-    set({ theme, enabledMarkets, targetCountry, dataSource, cost, hydrated: true });
+    set({ theme, enabledMarkets, targetCountry, dataSource, cost, displayCurrency, hydrated: true });
   },
   setTheme(theme) {
     applyTheme(theme);
@@ -69,6 +75,11 @@ export const useSettings = create<SettingsState>((set, get) => ({
   setDataSource(d) {
     set({ dataSource: d });
     void setSetting("dataSource", d);
+  },
+  setDisplayCurrency(c) {
+    setDisplayCurrency(c);
+    set({ displayCurrency: c });
+    void setSetting("displayCurrency", c);
   },
   setCost(c) {
     const cost = { ...get().cost, ...c };

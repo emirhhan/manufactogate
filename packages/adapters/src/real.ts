@@ -6,9 +6,10 @@ import { AdapterRegistry } from "./registry";
 import { createRealAdapter, type PageExtractor, type PageRunner, type RealMarketDef } from "./runtime";
 import { defTrendyol } from "./tr-trendyol";
 import { WAVE2_DEFS } from "./wave2";
+import { WAVE3_DEFS } from "./wave3";
 
 /** Wave-1 markets are calibrated against live pages; wave-2 markets are beta (generic card extraction). */
-export const REAL_DEFS: RealMarketDef[] = [def1688, defTaobao, defPinduoduo, defTrendyol, ...WAVE2_DEFS];
+export const REAL_DEFS: RealMarketDef[] = [def1688, defTaobao, defPinduoduo, defTrendyol, ...WAVE2_DEFS, ...WAVE3_DEFS];
 export const WAVE1_IDS = new Set<MarketId>(["cn-1688", "cn-taobao", "cn-pinduoduo", "tr-trendyol"]);
 
 /** Page-side extractors keyed by market, bundled into the extension's extract script. */
