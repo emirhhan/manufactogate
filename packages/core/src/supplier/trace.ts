@@ -26,8 +26,11 @@ export function traceScore(listing: RawListing, badges: NormalizedBadge[] = [], 
   if (allBadges.has("verified-factory")) { score += 0.4; reasons.push("kaynak fabrika etiketi"); }
   if (allBadges.has("deep-factory-audit") || allBadges.has("on-site-verified")) { score += 0.15; reasons.push("yerinde denetim"); }
   if (allBadges.has("strength-merchant") || allBadges.has("verified-supplier") || allBadges.has("gold-supplier")) { score += 0.05; reasons.push("doğrulanmış satıcı"); }
-  if (supplier?.businessType === "factory") { score += 0.25; reasons.push("işletme türü: üretici"); }
-  else if (supplier?.businessType === "trading") { score -= 0.25; reasons.push("işletme türü: ticaret"); }
+  // Card-level supplier signals (RawListing.supplier) stand in when no profile was fetched.
+  const businessType = supplier?.businessType ?? listing.supplier?.businessType;
+  if (businessType === "factory") { score += 0.25; reasons.push("işletme türü: üretici"); }
+  else if (businessType === "trading") { score -= 0.25; reasons.push("işletme türü: ticaret"); }
+  if (listing.supplier?.verified && !allBadges.has("verified-factory") && !allBadges.has("strength-merchant") && !allBadges.has("verified-supplier") && !allBadges.has("gold-supplier")) { score += 0.05; reasons.push("doğrulanmış satıcı"); }
   if (FACTORY_NAME.test(name)) { score += 0.15; reasons.push("firma adı üretim gösteriyor"); }
   if (TRADER_NAME.test(name)) { score -= 0.2; reasons.push("firma adı ticaret gösteriyor"); }
   if ((listing.moq ?? 1) >= 50) { score += 0.05; reasons.push("yüksek MOQ"); }
@@ -37,7 +40,7 @@ export function traceScore(listing: RawListing, badges: NormalizedBadge[] = [], 
   else if (price !== null && ctx.clusterMedianPrice !== undefined && ctx.clusterMedianPrice > 0 && price > ctx.clusterMedianPrice * 1.5) { score -= 0.1; reasons.push("küme medyanının çok üstünde"); }
   const location = `${listing.location ?? ""} ${supplier?.location ?? ""}`;
   if (HUBS.test(location)) { score += 0.05; reasons.push("üretim bölgesinde"); }
-  if ((supplier?.yearsOnPlatform ?? 0) >= 5) { score += 0.05; reasons.push("5+ yıl platformda"); }
+  if ((supplier?.yearsOnPlatform ?? listing.supplier?.years ?? 0) >= 5) { score += 0.05; reasons.push("5+ yıl platformda"); }
   if ((supplier?.repeatPurchaseRate ?? 0) >= 0.3) { score += 0.05; reasons.push("yüksek tekrar alım oranı"); }
   if ((supplier?.responseRate ?? 0) >= 0.9) { score += 0.02; }
   return { factory: Math.max(0, Math.min(1, Math.round(score * 1000) / 1000)), reasons };

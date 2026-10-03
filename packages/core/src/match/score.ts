@@ -1,14 +1,19 @@
 import {
   ATTRIBUTE_LABELS_TR,
+  AUDIENCE_LABELS_TR,
+  accessoryKind,
   attributeAgreements,
   attributeMismatches,
   cosineSimilarity,
   enrichFingerprint,
   formatAttribute,
+  isUnitToken,
   jaccard,
+  lookalikeTerms,
   overlap,
   phraseRelation,
   phashSimilarity,
+  sameModelCode,
 } from "../fingerprint";
 import type { Fingerprint } from "../fingerprint";
 
@@ -28,6 +33,18 @@ export interface MatchSignals {
   phrase?: "exact" | "variant" | "conflict";
   /** Category keys compared when both sides carry one. */
   categoryMatch?: boolean;
+  /** Same model code or phrase shape but another brand ("Dreame V12" for "Dyson V12"). */
+  brandConflict?: boolean;
+  /** Candidate title carries replica / lookalike markers ("replika", "574 style", "benzeri"). */
+  lookalike?: boolean;
+  /** Both sides state a pack quantity and they differ, or the candidate is a small multipack of a single-unit query. */
+  packMismatch?: boolean;
+  /** Every token of the query (or of one of its translations) appears in the candidate title. */
+  fullCoverage?: boolean;
+  /** Both sides are accessories of different families (a case vs a screen protector). */
+  accessoryKindMismatch?: boolean;
+  /** Men's vs women's vs kids' edition. */
+  audienceMismatch?: boolean;
 }
 
 export interface MatchScore {
@@ -157,9 +174,17 @@ export function scoreMatch(query: Fingerprint, candidate: Fingerprint, opts: Sco
   // Model numbers: a shared code counts unless both sides also carry different codes (A800S vs A500S).
   const qm = query.modelNumbers ?? [];
   const cm = candidate.modelNumbers ?? [];
-  const shared = qm.filter((m) => cm.includes(m));
-  const codeConflict = shared.length > 0 && qm.some((m) => !shared.includes(m)) && cm.some((m) => !shared.includes(m));
-  const hit = shared.length > 0 && !codeConflict && rel !== "conflict";
+  const shared = qm.filter((m) => cm.some((c) => sameModelCode(m, c)));
+  const unmatchedQ = qm.some((m) => !cm.some((c) => sameModelCode(m, c)));
+  const unmatchedC = cm.some((c) => !qm.some((m) => sameModelCode(m, c)));
+  const codeConflict = shared.length > 0 && unmatchedQ && unmatchedC;
+  // Same code, other brand: "Dreame V12" is not "Dyson V12". Only when both phrases start with a word brand.
+  const brandConflict = !symmetric && rel === "none" && brandsDiffer(query.phrase ?? "", candidate.phrase ?? "");
+  if (brandConflict) {
+    signals.brandConflict = true;
+    reasons.push("marka farklı");
+  }
+  const hit = shared.length > 0 && !codeConflict && rel !== "conflict" && !brandConflict;
   if (query.title && candidate.title) signals.modelNumberHit = hit;
   if (codeConflict) reasons.push("model numarası farklı");
 
@@ -174,6 +199,25 @@ export function scoreMatch(query: Fingerprint, candidate: Fingerprint, opts: Sco
       accessoryPenalty = true;
       signals.accessory = true;
     }
+  }
+
+  // Both sides accessories, but of different families: a case is not a screen protector.
+  let accessoryKindMismatch = false;
+  if (!symmetric) {
+    const qKinds = new Set([...(query.accessory ?? []), ...(query.altTitles ?? []).flatMap((t) => accessoryTermsCached(t))].map(accessoryKind).filter((k): k is string => !!k));
+    const cKinds = new Set((candidate.accessory ?? []).map(accessoryKind).filter((k): k is string => !!k));
+    if (qKinds.size && cKinds.size && ![...qKinds].some((k) => cKinds.has(k))) {
+      accessoryKindMismatch = true;
+      signals.accessoryKindMismatch = true;
+      reasons.push(`farklı aksesuar türü (${[...qKinds][0]} vs ${[...cKinds][0]})`);
+    }
+  }
+  // Men's / women's / kids' editions are variants.
+  let audienceMismatch = false;
+  if (!symmetric && query.attrs?.audience !== undefined && candidate.attrs?.audience !== undefined && query.attrs.audience !== candidate.attrs.audience) {
+    audienceMismatch = true;
+    signals.audienceMismatch = true;
+    reasons.push(`hedef kitle farklı (${AUDIENCE_LABELS_TR[query.attrs.audience]} vs ${AUDIENCE_LABELS_TR[candidate.attrs.audience]})`);
   }
 
   // Attributes (capacity, power, storage …).
@@ -197,9 +241,55 @@ export function scoreMatch(query: Fingerprint, candidate: Fingerprint, opts: Sco
   const visualContradicts =
     signals.visualPhash !== undefined && signals.visualPhash < 0.25 && (signals.visualClip === undefined || signals.visualClip < 0.25) && (signals.visualDhash === undefined || signals.visualDhash < 0.25);
 
+  // Pack size: "2'li paket" is another offer of the same product (a variant), never "same".
+  let packMismatch = false;
+  if (!symmetric && query.attrs && candidate.attrs) {
+    const qp = query.attrs.packQty;
+    const cp = candidate.attrs.packQty;
+    if ((qp !== undefined && cp !== undefined && qp !== cp) || (qp === undefined && cp !== undefined && cp >= 2 && cp <= 12)) {
+      packMismatch = true;
+      signals.packMismatch = true;
+      reasons.push(`paket adedi farklı (${qp ?? 1} vs ${cp})`);
+    }
+  }
+
+  // Lookalike / replica markers on the candidate only.
+  let lookalike = false;
+  if (!symmetric && candidate.title) {
+    const cl = lookalikeTerms(candidate.title);
+    const ql = [query.title ?? "", ...(query.altTitles ?? [])].some((t) => lookalikeTerms(t).length > 0);
+    if (cl.length && !ql) {
+      lookalike = true;
+      signals.lookalike = true;
+      reasons.push(`replika/benzeri görünüyor (${cl[0]})`);
+    }
+  }
+
+  // Every token of the query (or of a translation) is in the candidate, and the query names a model.
+  let fullCoverage = false;
+  if (!symmetric && cTokens && query.phrase) {
+    const sets = [qTokens, ...(query.altTokens ?? [])].filter((t): t is string[] => !!t && t.length >= 3);
+    const cset = new Set(cTokens);
+    const phraseTokens = query.phrase.split(" ");
+    for (const set of sets) {
+      if (!set.every((t) => cset.has(t))) continue;
+      const codeLike = set.some((t) => /[a-z]/.test(t) && /\d/.test(t) && !isUnitToken(t) && !/^\d+x\d+$/.test(t));
+      // One plain number inside a brand phrase ("jbl flip 6", "levi 501"); "24/6" or "50 x 70" are sizes, not models.
+      const phraseNumbers = phraseTokens.filter((t) => /^(?:\d{1,3}|ii|iii|iv)$/.test(t));
+      const numbered = phraseTokens.length >= 3 && phraseNumbers.length === 1 && set.includes(phraseNumbers[0]!);
+      if (codeLike || numbered) {
+        fullCoverage = true;
+        break;
+      }
+    }
+  }
+
   if (hit) {
     if (accessoryPenalty) {
       reasons.push("model numarası eşleşti ama aksesuar görünüyor");
+    } else if (lookalike || packMismatch) {
+      reasons.unshift("model numarası eşleşti");
+      score = Math.max(score, CONFIDENCE_THRESHOLDS.likely);
     } else if (attrMismatch) {
       reasons.push("model numarası eşleşti ama özellikler farklı");
       score = Math.max(score, CONFIDENCE_THRESHOLDS.similar);
@@ -216,13 +306,23 @@ export function scoreMatch(query: Fingerprint, candidate: Fingerprint, opts: Sco
   }
   if (attrMismatch) score *= 0.5;
   else if (signals.attributeAgree) score = Math.min(1, score + 0.05);
+  // A numbered brand+model phrase ("dyson v12 detect", "levi 501") is identity evidence on its own, unless the image says otherwise.
+  const exactNumbered = rel === "exact" && (query.phrase ?? "").split(" ").length >= 2 && (query.phrase ?? "").split(" ").some((t) => /\d/.test(t) && !/^\d+x\d+$/.test(t) && !isUnitToken(t));
+  if (exactNumbered && !visualContradicts && !accessoryPenalty && !attrMismatch && !lookalike && !packMismatch && !audienceMismatch && !accessoryKindMismatch) score = Math.max(score, CONFIDENCE_THRESHOLDS.same);
+  if (fullCoverage && !hit && !accessoryPenalty && !attrMismatch && !codeConflict && rel !== "conflict" && !brandConflict && !lookalike && !packMismatch && !visualContradicts && !audienceMismatch && !accessoryKindMismatch) {
+    signals.fullCoverage = true;
+    reasons.unshift("sorgunun tamamı başlıkta");
+    score = Math.max(score, CONFIDENCE_THRESHOLDS.same);
+  }
   // Text alone (no image, no exact model) never proves identity.
-  if (!hasVisual && !hit && rel !== "exact") score = Math.min(score, TEXT_ONLY_CEILING);
+  if (!hasVisual && !hit && rel !== "exact" && !signals.fullCoverage) score = Math.min(score, TEXT_ONLY_CEILING);
   if (accessoryPenalty) {
     score *= 0.35;
     reasons.push("aksesuar/parça görünüyor");
   }
   if (rel === "variant" && !visualIdentical) score = Math.min(score, CONFIDENCE_THRESHOLDS.same - 0.01);
+  if (packMismatch || audienceMismatch) score = Math.min(score, CONFIDENCE_THRESHOLDS.same - 0.01);
+  if (lookalike || brandConflict || accessoryKindMismatch) score = Math.min(score, CONFIDENCE_THRESHOLDS.likely - 0.01);
 
   if (!symmetric && candidate.viaImageSearch && score < CONFIDENCE_THRESHOLDS.likely && !visualContradicts && !accessoryPenalty) {
     // The market's visual engine already matched this item; treat as "likely" unless our own signals say more.
@@ -230,6 +330,24 @@ export function scoreMatch(query: Fingerprint, candidate: Fingerprint, opts: Sco
     reasons.push("pazarın görsel araması eşleştirdi");
   }
   return { score: clamp01(score), signals, reasons };
+}
+
+/**
+ * Both phrases start with a word-only brand token, the brands differ, neither phrase mentions the
+ * other's brand, and at least one phrase carries a number: "dyson v12 detect" vs "dreame v12".
+ */
+function brandsDiffer(a: string, b: string): boolean {
+  if (!a || !b) return false;
+  const ta = a.split(" ");
+  const tb = b.split(" ");
+  if (ta.length < 2 || tb.length < 2) return false;
+  const a0 = ta[0]!;
+  const b0 = tb[0]!;
+  if (a0 === b0 || !/^[a-z]{3,}$/.test(a0) || !/^[a-z]{3,}$/.test(b0)) return false;
+  if (a0.includes(b0) || b0.includes(a0) || ta.includes(b0) || tb.includes(a0)) return false;
+  // A number on either side, or a shared product word after the brands ("kanken classic" vs "herschel classic").
+  const sharedLater = ta.slice(1).some((t) => tb.slice(1).includes(t));
+  return sharedLater || ta.some((t) => /\d/.test(t)) || tb.some((t) => /\d/.test(t));
 }
 
 const accCache = new Map<string, string[]>();

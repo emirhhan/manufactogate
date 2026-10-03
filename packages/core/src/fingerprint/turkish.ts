@@ -1,13 +1,13 @@
 /** Turkish-aware text folding for search: diacritics to ASCII, light stemming and word-boundary matching. */
 
-const FOLD: Record<string, string> = { ç: "c", ğ: "g", ı: "i", ö: "o", ş: "s", ü: "u", â: "a", î: "i", û: "u" };
+const FOLD: Record<string, string> = { ç: "c", ğ: "g", ı: "i", ö: "o", ş: "s", ü: "u", â: "a", î: "i", û: "u", ä: "a", á: "a", à: "a", å: "a", ã: "a", é: "e", è: "e", ê: "e", ë: "e", í: "i", ï: "i", ó: "o", ò: "o", ô: "o", õ: "o", ø: "o", ú: "u", ù: "u", ñ: "n", ß: "ss", ý: "y" };
 
 export function foldTr(s: string): string {
   return s
     .replace(/İ/g, "i")
     .replace(/I/g, "ı")
     .toLowerCase()
-    .replace(/[çğıöşüâîû]/g, (c) => FOLD[c] ?? c);
+    .replace(/[çğıöşüâîûäáàåãéèêëíïóòôõøúùñßý]/g, (c) => FOLD[c] ?? c);
 }
 
 /** Remainders that may follow a query term inside a longer haystack word ("kulak" + "lik"). */

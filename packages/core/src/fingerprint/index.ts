@@ -2,6 +2,7 @@ export * from "./phash";
 export * from "./vector";
 export * from "./text";
 export * from "./turkish";
+export * from "./clip";
 
 import { accessoryTerms, attributes, brandModelPhrase, modelNumbers, tokens, type TitleAttributes } from "./text";
 

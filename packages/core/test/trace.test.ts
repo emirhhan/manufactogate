@@ -33,6 +33,21 @@ describe("traceScore", () => {
   });
 });
 
+describe("traceScore with card-level supplier info", () => {
+  it("reads RawListing.supplier when no profile is given", () => {
+    const r = traceScore(l("a", "Some Shop", 10, { supplier: { businessType: "factory", verified: true, years: 7 } }));
+    expect(r.reasons).toEqual(expect.arrayContaining(["işletme türü: üretici", "doğrulanmış satıcı", "5+ yıl platformda"]));
+    expect(r.factory).toBeGreaterThanOrEqual(0.6);
+    const t = traceScore(l("b", "Some Shop", 10, { supplier: { businessType: "trading" } }));
+    expect(t.reasons).toContain("işletme türü: ticaret");
+    // A badge already counting the verification does not double it.
+    const badged = traceScore(l("c", "Some Shop", 10, { supplier: { verified: true } }), ["verified-supplier"]);
+    expect(badged.reasons).toContain("doğrulanmış satıcı");
+    expect(badged.reasons.filter((x) => x === "doğrulanmış satıcı")).toHaveLength(1);
+    expect(badged.factory).toBeCloseTo(0.35);
+  });
+});
+
 describe("rankManufacturers", () => {
   const member = (listing: RawListing): ScoredListing => ({ listing, fingerprint: {}, match: { score: 0.9, signals: {}, reasons: [] }, band: "same" });
   it("orders by factory score then price and flags the likely manufacturer", () => {
