@@ -1,4 +1,5 @@
 import {
+  attachClip,
   modelNumbers,
   phashFromGray,
   rgbaToGray,
@@ -44,37 +45,64 @@ function loadImage(url: string): Promise<HTMLImageElement> {
 }
 
 import { extensionVersion, sendToExtension } from "./bridge";
+import { clipProvider } from "./clip";
 import type { ExtToWeb } from "@manufactogate/adapters";
+
+/** A listing image as a same-origin data URL (market CDNs rarely send CORS headers; the extension can fetch them). */
+const dataUrls = new Map<string, Promise<string>>();
+function readableImage(url: string): Promise<string> {
+  let p = dataUrls.get(url);
+  if (!p) {
+    p = (async () => {
+      if (extensionVersion() && /^https?:/.test(url)) {
+        try {
+          const r = await sendToExtension<ExtToWeb & { type: "image:result" }>({ type: "image", url }, 15000);
+          if (r.dataUrl) return r.dataUrl;
+        } catch {
+          /* fall through to direct load */
+        }
+      }
+      return url;
+    })();
+    if (dataUrls.size > 2000) dataUrls.clear();
+    dataUrls.set(url, p);
+  }
+  return p;
+}
 
 const cache = new Map<string, Promise<string | undefined>>();
 function cachedPhash(url: string): Promise<string | undefined> {
   let p = cache.get(url);
   if (!p) {
-    p = (async () => {
-      // Market CDNs rarely send CORS headers; the extension can fetch them with host permissions.
-      if (extensionVersion() && /^https?:/.test(url)) {
-        try {
-          const r = await sendToExtension<ExtToWeb & { type: "image:result" }>({ type: "image", url }, 15000);
-          const h = await phashFromUrl(r.dataUrl);
-          if (h) return h;
-        } catch {
-          /* fall through to direct load */
-        }
-      }
-      return phashFromUrl(url);
-    })();
+    p = readableImage(url).then(async (src) => (await phashFromUrl(src)) ?? (src !== url ? phashFromUrl(url) : undefined));
     cache.set(url, p);
   }
   return p;
 }
 
-/** Sprint 0 fingerprinter: pHash in the browser plus title signals. CLIP arrives in Sprint 1. */
+/** Turns the visual model on for this session (loads it on first use); off by the user's setting. */
+let clipWanted = false;
+export function setVisualAi(on: boolean): void {
+  clipWanted = on;
+  // Unit tests never pull the model.
+  if (on && import.meta.env.MODE !== "test") void clipProvider.load();
+}
+/** The query waits a little for a model still loading; listings never wait (they keep pHash only). */
+async function clipReady(waitMs: number): Promise<boolean> {
+  if (!clipWanted) return false;
+  if (clipProvider.isReady()) return true;
+  if (waitMs <= 0) return false;
+  return Promise.race([clipProvider.load(), new Promise<boolean>((r) => setTimeout(() => r(false), waitMs))]);
+}
+
+/** Browser fingerprinter: pHash, CLIP embeddings when the visual model is on, and title signals. */
 export const browserFingerprinter: Fingerprinter = {
   async forQuery(input: SearchInput): Promise<Fingerprint> {
     const fp: Fingerprint = {};
     if (input.kind === "image") {
       const h = await phashFromUrl(input.image.dataUrl, input.image.region);
       if (h) fp.phash = h;
+      if (await clipReady(30_000)) await attachClip(fp, clipProvider, input.image);
       if (input.title) {
         fp.title = input.title;
         fp.modelNumbers = modelNumbers(input.title);
@@ -93,6 +121,7 @@ export const browserFingerprinter: Fingerprinter = {
     if (first) {
       const h = await cachedPhash(first);
       if (h) fp.phash = h;
+      if (await clipReady(0)) await attachClip(fp, clipProvider, { dataUrl: await readableImage(first) });
     }
     return fp;
   },

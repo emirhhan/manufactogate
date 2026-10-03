@@ -1,4 +1,5 @@
 import { useMemo } from "react";
+import { setVisualAi } from "@/lib/fingerprinter";
 import { create } from "zustand";
 import { applyCountryOverrides, sanitizeCountryOverrides, type CountryOverrides, type CountryProfile, type MarketId } from "@manufactogate/core";
 import { REAL_DEF_BY_ID } from "@manufactogate/adapters";
@@ -24,8 +25,10 @@ export const MAX_PER_MARKET_OPTIONS = [150, 300, 600] as const;
 export type MaxPerMarket = (typeof MAX_PER_MARKET_OPTIONS)[number];
 export interface SearchSettings {
   maxPerMarket: MaxPerMarket;
+  /** In-browser CLIP model for visual similarity (~90 MB, downloaded once). */
+  visualAi: boolean;
 }
-export const DEFAULT_SEARCH: SearchSettings = { maxPerMarket: 150 };
+export const DEFAULT_SEARCH: SearchSettings = { maxPerMarket: 150, visualAi: true };
 
 /** Currencies whose TRY rate the user can override in Settings (the rest keep the dated table). */
 export const EDITABLE_FX = ["CNY", "USD", "EUR", "GBP"] as const;
@@ -212,6 +215,7 @@ export const useSettings = create<SettingsState>((set, get) => ({
       applyFx(fxRates);
       applyTheme(theme);
       set({ theme, enabledMarkets, targetCountry, dataSource, cost, displayCurrency, search, fxRates, countryOverrides, onboardingDismissedAt, hydrated: true, storageError });
+      setVisualAi(search.visualAi);
       if (enabledMarkets.length !== storedMarkets.length || enabledMarkets.some((m, i) => m !== storedMarkets[i])) void setSetting("enabledMarkets", enabledMarkets).catch(() => undefined);
     } catch (e) {
       // Even a failing database must not leave a blank page: render with defaults and say why.
@@ -266,6 +270,7 @@ export const useSettings = create<SettingsState>((set, get) => ({
   setSearch(s) {
     const search = { ...get().search, ...s };
     set({ search });
+    if (s.visualAi !== undefined) setVisualAi(search.visualAi);
     void setSetting("search", search).catch(() => undefined);
   },
   setFxRate(code, rate) {

@@ -372,6 +372,13 @@ export function Settings() {
             ))}
             <span>sonuç</span>
           </div>
+          <label className="mt-3 flex items-start gap-2">
+            <input type="checkbox" className="mt-0.5" checked={s.search.visualAi} onChange={(e) => s.setSearch({ visualAi: e.target.checked })} />
+            <span>
+              <span className="font-medium">Görsel yapay zekâ</span>
+              <span className="block text-[12px] text-muted">Sonuçları ürünün görünüşüne göre karşılaştırır (CLIP modeli, tarayıcında çalışır). İlk açılışta bir kez ~90 MB indirilir, sonra önbellekten gelir.</span>
+            </span>
+          </label>
           <p className="mt-2 text-[12px] text-muted">Daha fazla sonuç = pazar başına daha fazla sayfa ve daha uzun açık kalan sekmeler. 600 ile 33 pazarda bir arama dakikalar sürebilir ve bazı pazarlar hız sınırı uygular; sorun çıkarsa 150'ye dön.</p>
         </Card>
       </section>

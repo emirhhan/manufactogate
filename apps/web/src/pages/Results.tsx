@@ -46,14 +46,14 @@ interface Filters {
 }
 
 /** Filters live in the URL so a /search/:id link can be reloaded or shared with its state. */
-function readFilters(sp: URLSearchParams): Filters {
+function readFilters(sp: URLSearchParams, defaultSort: Sort = "relevance"): Filters {
   const num = (k: string) => {
     const v = Number(sp.get(k));
     return sp.has(k) && Number.isFinite(v) && v > 0 ? v : null;
   };
   const sort = sp.get("sort") as Sort | null;
   return {
-    sort: sort && SORTS.includes(sort) ? sort : "relevance",
+    sort: sort && SORTS.includes(sort) ? sort : defaultSort,
     markets: new Set((sp.get("m") ?? "").split(",").filter(Boolean) as MarketId[]),
     close: sp.get("close") === "1",
     img: sp.get("img") === "1",
@@ -75,7 +75,9 @@ export function Results() {
   const { id } = useParams();
   const s = useSearch();
   const [sp, setSp] = useSearchParams();
-  const f = useMemo(() => readFilters(sp), [sp]);
+  // A photo search lists the closest look-alikes first; other searches keep the markets' own order.
+  const defaultSort: Sort = (s.effective ?? s.current?.input)?.kind === "image" ? "match" : "relevance";
+  const f = useMemo(() => readFilters(sp, defaultSort), [sp, defaultSort]);
   const [showClusters, setShowClusters] = useState(false);
   const [showSimilar, setShowSimilar] = useState(false);
   const [limit, setLimit] = useState(PAGE);
@@ -113,7 +115,7 @@ export function Results() {
     },
     [sp, setSp],
   );
-  const clearFilters = () => setSp(new URLSearchParams(f.sort !== "relevance" ? { sort: f.sort } : {}), { replace: true });
+  const clearFilters = () => setSp(new URLSearchParams(f.sort !== defaultSort ? { sort: f.sort } : {}), { replace: true });
 
   const reg = getRegistry();
   const input = s.current?.input;
@@ -133,8 +135,9 @@ export function Results() {
   const confidence = useMemo(() => {
     const map = new Map<string, number>();
     for (const c of s.clusters) for (const m of c.members) map.set(`${m.listing.market}:${m.listing.id}`, m.match.score);
+    for (const m of s.similar) if (!map.has(`${m.listing.market}:${m.listing.id}`)) map.set(`${m.listing.market}:${m.listing.id}`, m.match.score);
     return map;
-  }, [s.clusters]);
+  }, [s.clusters, s.similar]);
   const relOf = useCallback(
     (l: RawListing): number | undefined => {
       if (!queryText) return undefined;
@@ -384,7 +387,7 @@ export function Results() {
             </div>
             <div>
               <div className="mb-1.5 text-[11px] font-medium uppercase tracking-wide text-muted">Sıralama</div>
-              <select value={f.sort} onChange={(e) => setParam({ sort: e.target.value === "relevance" ? null : e.target.value })} className="h-8 w-full rounded-md border border-border bg-surface px-2 text-[13px]">
+              <select value={f.sort} onChange={(e) => setParam({ sort: e.target.value === defaultSort ? null : e.target.value })} className="h-8 w-full rounded-md border border-border bg-surface px-2 text-[13px]">
                 {SORTS.map((o) => <option key={o} value={o}>{COPY.sorts[o]}</option>)}
               </select>
             </div>
